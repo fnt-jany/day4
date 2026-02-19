@@ -96,8 +96,8 @@ function App() {
       loginButtonHint: '로그인 버튼을 불러오는 중입니다...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.',
       loginFailed: '로그인에 실패했습니다. 다시 시도해 주세요.',
-      guestLogin: '???? ??',
-      guestLoginFailed: '??? ???? ??????.',
+      guestLogin: '\uAC8C\uC2A4\uD2B8\uB85C \uB85C\uADF8\uC778',
+      guestLoginFailed: '\uAC8C\uC2A4\uD2B8 \uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
       loading: '불러오는 중...',
     },
     en: {
