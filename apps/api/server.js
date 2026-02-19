@@ -1,107 +1,28 @@
-﻿import 'dotenv/config'
+import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import { OAuth2Client } from 'google-auth-library'
-import { open } from 'sqlite'
-import sqlite3 from 'sqlite3'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const dbPath = path.join(__dirname, 'data.sqlite')
+import { createClient } from '@supabase/supabase-js'
 
 const app = express()
 const port = Number(process.env.API_PORT || 8787)
 const googleClientId = process.env.GOOGLE_CLIENT_ID || ''
 const jwtSecret = process.env.JWT_SECRET || 'change-this-dev-secret'
+const supabaseUrl = process.env.SUPABASE_URL || ''
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const googleClient = new OAuth2Client(googleClientId)
+
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: { persistSession: false },
+})
 
 app.use(cors())
 app.use(express.json())
-
-const db = await open({
-  filename: dbPath,
-  driver: sqlite3.Database,
-})
-
-await db.exec('PRAGMA foreign_keys = ON;')
-
-await db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  google_sub TEXT NOT NULL UNIQUE,
-  email TEXT,
-  name TEXT,
-  picture_url TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`)
-
-await db.exec(`
-CREATE TABLE IF NOT EXISTS goals (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  target_date TEXT NOT NULL,
-  target_level REAL NOT NULL,
-  unit TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`)
-
-await db.exec(`
-CREATE TABLE IF NOT EXISTS goal_records (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  goal_id INTEGER NOT NULL,
-  date TEXT NOT NULL,
-  level REAL NOT NULL,
-  message TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY(goal_id) REFERENCES goals(id) ON DELETE CASCADE
-);
-`)
-
-await db.exec(`
-CREATE TABLE IF NOT EXISTS app_settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`)
-
-await db.exec(`
-CREATE TABLE IF NOT EXISTS user_settings (
-  user_id INTEGER NOT NULL,
-  key TEXT NOT NULL,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (user_id, key),
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-`)
-
-const goalColumns = await db.all(`PRAGMA table_info(goals)`)
-if (!goalColumns.some((column) => column.name === 'user_id')) {
-  await db.exec(`ALTER TABLE goals ADD COLUMN user_id INTEGER`)
-}
-
-await db.exec(`CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id);`)
-await db.exec(`CREATE INDEX IF NOT EXISTS idx_goal_records_goal_id ON goal_records(goal_id);`)
-
-async function getOrCreateGuestUser() {
-  await db.run(
-    `INSERT INTO users (google_sub, email, name, picture_url, updated_at)
-     VALUES ('guest-mode', NULL, 'Guest', NULL, datetime('now'))
-     ON CONFLICT(google_sub) DO UPDATE SET
-       name = 'Guest',
-       updated_at = datetime('now')`,
-  )
-
-  return db.get(`SELECT id, email, name, picture_url FROM users WHERE google_sub = 'guest-mode'`)
-}
-
 
 const mapGoal = (row) => ({
   id: row.id,
@@ -120,6 +41,64 @@ const getToken = (req) => {
   return value.slice(7).trim() || null
 }
 
+const getUserById = async (userId) => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, name, picture_url')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  if (!data) {
+    return null
+  }
+
+  return {
+    id: data.id,
+    email: data.email,
+    name: data.name,
+    pictureUrl: data.picture_url ?? null,
+  }
+}
+
+async function getOrCreateGuestUser() {
+  const payload = {
+    google_sub: 'guest-mode',
+    email: null,
+    name: 'Guest',
+    picture_url: null,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { error } = await supabase.from('users').upsert(payload, {
+    onConflict: 'google_sub',
+  })
+
+  if (error) {
+    throw error
+  }
+
+  const { data: user, error: selectError } = await supabase
+    .from('users')
+    .select('id, email, name, picture_url')
+    .eq('google_sub', 'guest-mode')
+    .single()
+
+  if (selectError) {
+    throw selectError
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    pictureUrl: user.picture_url ?? null,
+  }
+}
+
 const requireAuth = async (req, res, next) => {
   const token = getToken(req)
   if (!token) {
@@ -136,20 +115,14 @@ const requireAuth = async (req, res, next) => {
       return
     }
 
-    const user = await db.get(`SELECT id, email, name, picture_url FROM users WHERE id = ?`, [userId])
+    const user = await getUserById(userId)
     if (!user) {
       res.status(401).json({ message: 'unauthorized' })
       return
     }
 
     req.userId = user.id
-    req.user = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      pictureUrl: user.picture_url ?? null,
-    }
-
+    req.user = user
     next()
   } catch {
     res.status(401).json({ message: 'unauthorized' })
@@ -157,31 +130,36 @@ const requireAuth = async (req, res, next) => {
 }
 
 async function listGoals(userId) {
-  const goals = (
-    await db.all(
-      `SELECT id, name, target_date, target_level, unit
-       FROM goals
-       WHERE user_id = ?
-       ORDER BY id DESC`,
-      [userId],
-    )
-  ).map(mapGoal)
+  const { data: goalRows, error: goalsError } = await supabase
+    .from('goals')
+    .select('id, name, target_date, target_level, unit')
+    .eq('user_id', userId)
+    .order('id', { ascending: false })
+
+  if (goalsError) {
+    throw goalsError
+  }
+
+  const goals = (goalRows || []).map(mapGoal)
 
   if (goals.length === 0) {
     return []
   }
 
-  const records = await db.all(
-    `SELECT gr.id, gr.goal_id, gr.date, gr.level, gr.message
-     FROM goal_records gr
-     JOIN goals g ON g.id = gr.goal_id
-     WHERE g.user_id = ?
-     ORDER BY gr.date DESC, gr.id DESC`,
-    [userId],
-  )
+  const goalIds = goals.map((goal) => goal.id)
+  const { data: recordRows, error: recordsError } = await supabase
+    .from('goal_records')
+    .select('id, goal_id, date, level, message')
+    .in('goal_id', goalIds)
+    .order('date', { ascending: false })
+    .order('id', { ascending: false })
+
+  if (recordsError) {
+    throw recordsError
+  }
 
   const byGoal = new Map(goals.map((goal) => [goal.id, goal]))
-  for (const record of records) {
+  for (const record of recordRows || []) {
     const goal = byGoal.get(record.goal_id)
     if (!goal) continue
 
@@ -197,15 +175,50 @@ async function listGoals(userId) {
 }
 
 async function getChartSpacingMode(userId) {
-  const row = await db.get(`SELECT value FROM user_settings WHERE user_id = ? AND key = 'chart_spacing_mode'`, [userId])
-  const value = row?.value
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('value')
+    .eq('user_id', userId)
+    .eq('key', 'chart_spacing_mode')
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  const value = data?.value
   return value === 'actual' ? 'actual' : 'equal'
 }
 
 async function getLanguage(userId) {
-  const row = await db.get(`SELECT value FROM user_settings WHERE user_id = ? AND key = 'language'`, [userId])
-  const value = row?.value
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('value')
+    .eq('user_id', userId)
+    .eq('key', 'language')
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  const value = data?.value
   return value === 'en' ? 'en' : 'ko'
+}
+
+const ensureOwnedGoal = async (goalId, userId) => {
+  const { data, error } = await supabase
+    .from('goals')
+    .select('id')
+    .eq('id', goalId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return data
 }
 
 app.get('/api/health', (_req, res) => {
@@ -213,20 +226,17 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.post('/api/auth/guest', async (_req, res) => {
-  const user = await getOrCreateGuestUser()
-  const token = jwt.sign({ userId: user.id, sub: 'guest-mode' }, jwtSecret, {
-    expiresIn: '7d',
-  })
+  try {
+    const user = await getOrCreateGuestUser()
+    const token = jwt.sign({ userId: user.id, sub: 'guest-mode' }, jwtSecret, {
+      expiresIn: '7d',
+    })
 
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      pictureUrl: user.picture_url ?? null,
-    },
-  })
+    res.json({ token, user })
+  } catch (error) {
+    console.error('guest auth failed', error)
+    res.status(500).json({ message: 'guest auth failed' })
+  }
 })
 
 app.post('/api/auth/google', async (req, res) => {
@@ -256,42 +266,46 @@ app.post('/api/auth/google', async (req, res) => {
       return
     }
 
-    const email = payload.email || null
-    const name = payload.name || null
-    const pictureUrl = payload.picture || null
+    const userPayload = {
+      google_sub: googleSub,
+      email: payload.email || null,
+      name: payload.name || null,
+      picture_url: payload.picture || null,
+      updated_at: new Date().toISOString(),
+    }
 
-    await db.run(
-      `INSERT INTO users (google_sub, email, name, picture_url, updated_at)
-       VALUES (?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(google_sub) DO UPDATE SET
-         email = excluded.email,
-         name = excluded.name,
-         picture_url = excluded.picture_url,
-         updated_at = datetime('now')`,
-      [googleSub, email, name, pictureUrl],
-    )
+    const { error: upsertError } = await supabase.from('users').upsert(userPayload, {
+      onConflict: 'google_sub',
+    })
 
-    const user = await db.get(
-      `SELECT id, email, name, picture_url
-       FROM users
-       WHERE google_sub = ?`,
-      [googleSub],
-    )
+    if (upsertError) {
+      throw upsertError
+    }
+
+    const { data: userRow, error: userError } = await supabase
+      .from('users')
+      .select('id, email, name, picture_url')
+      .eq('google_sub', googleSub)
+      .single()
+
+    if (userError) {
+      throw userError
+    }
+
+    const user = {
+      id: userRow.id,
+      email: userRow.email,
+      name: userRow.name,
+      pictureUrl: userRow.picture_url ?? null,
+    }
 
     const token = jwt.sign({ userId: user.id, sub: googleSub }, jwtSecret, {
       expiresIn: '7d',
     })
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        pictureUrl: user.picture_url ?? null,
-      },
-    })
-  } catch {
+    res.json({ token, user })
+  } catch (error) {
+    console.error('google auth failed', error)
     res.status(401).json({ message: 'invalid token' })
   }
 })
@@ -301,11 +315,16 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 })
 
 app.get('/api/settings', requireAuth, async (req, res) => {
-  const [chartSpacingMode, language] = await Promise.all([
-    getChartSpacingMode(req.userId),
-    getLanguage(req.userId),
-  ])
-  res.json({ chartSpacingMode, language })
+  try {
+    const [chartSpacingMode, language] = await Promise.all([
+      getChartSpacingMode(req.userId),
+      getLanguage(req.userId),
+    ])
+    res.json({ chartSpacingMode, language })
+  } catch (error) {
+    console.error('settings read failed', error)
+    res.status(500).json({ message: 'failed to read settings' })
+  }
 })
 
 app.put('/api/settings', requireAuth, async (req, res) => {
@@ -319,34 +338,54 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     return
   }
 
-  if (hasSpacingMode) {
-    await db.run(
-      `INSERT INTO user_settings (user_id, key, value, updated_at)
-       VALUES (?, 'chart_spacing_mode', ?, datetime('now'))
-       ON CONFLICT(user_id, key) DO UPDATE SET
-         value = excluded.value,
-         updated_at = datetime('now')`,
-      [req.userId, chartSpacingMode],
-    )
-  }
+  try {
+    if (hasSpacingMode) {
+      const { error } = await supabase.from('user_settings').upsert(
+        {
+          user_id: req.userId,
+          key: 'chart_spacing_mode',
+          value: chartSpacingMode,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,key' },
+      )
 
-  if (hasLanguage) {
-    await db.run(
-      `INSERT INTO user_settings (user_id, key, value, updated_at)
-       VALUES (?, 'language', ?, datetime('now'))
-       ON CONFLICT(user_id, key) DO UPDATE SET
-         value = excluded.value,
-         updated_at = datetime('now')`,
-      [req.userId, language],
-    )
-  }
+      if (error) {
+        throw error
+      }
+    }
 
-  res.json({ ok: true })
+    if (hasLanguage) {
+      const { error } = await supabase.from('user_settings').upsert(
+        {
+          user_id: req.userId,
+          key: 'language',
+          value: language,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,key' },
+      )
+
+      if (error) {
+        throw error
+      }
+    }
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('settings update failed', error)
+    res.status(500).json({ message: 'failed to update settings' })
+  }
 })
 
 app.get('/api/goals', requireAuth, async (req, res) => {
-  const goals = await listGoals(req.userId)
-  res.json(goals)
+  try {
+    const goals = await listGoals(req.userId)
+    res.json(goals)
+  } catch (error) {
+    console.error('goals read failed', error)
+    res.status(500).json({ message: 'failed to read goals' })
+  }
 })
 
 app.post('/api/goals', requireAuth, async (req, res) => {
@@ -357,12 +396,28 @@ app.post('/api/goals', requireAuth, async (req, res) => {
     return
   }
 
-  const result = await db.run(
-    `INSERT INTO goals (name, target_date, target_level, unit, user_id) VALUES (?, ?, ?, ?, ?)`,
-    [String(name).trim(), targetDate, Number(targetLevel), String(unit).trim(), req.userId],
-  )
+  try {
+    const { data, error } = await supabase
+      .from('goals')
+      .insert({
+        name: String(name).trim(),
+        target_date: targetDate,
+        target_level: Number(targetLevel),
+        unit: String(unit).trim(),
+        user_id: req.userId,
+      })
+      .select('id')
+      .single()
 
-  res.status(201).json({ id: result.lastID })
+    if (error) {
+      throw error
+    }
+
+    res.status(201).json({ id: data.id })
+  } catch (error) {
+    console.error('goal create failed', error)
+    res.status(500).json({ message: 'failed to create goal' })
+  }
 })
 
 app.put('/api/goals/:goalId', requireAuth, async (req, res) => {
@@ -374,19 +429,34 @@ app.put('/api/goals/:goalId', requireAuth, async (req, res) => {
     return
   }
 
-  const result = await db.run(
-    `UPDATE goals
-     SET name = ?, target_date = ?, target_level = ?, unit = ?
-     WHERE id = ? AND user_id = ?`,
-    [String(name).trim(), targetDate, Number(targetLevel), String(unit).trim(), goalId, req.userId],
-  )
+  try {
+    const { data, error } = await supabase
+      .from('goals')
+      .update({
+        name: String(name).trim(),
+        target_date: targetDate,
+        target_level: Number(targetLevel),
+        unit: String(unit).trim(),
+      })
+      .eq('id', goalId)
+      .eq('user_id', req.userId)
+      .select('id')
+      .maybeSingle()
 
-  if (!result.changes) {
-    res.status(404).json({ message: 'goal not found' })
-    return
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      res.status(404).json({ message: 'goal not found' })
+      return
+    }
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('goal update failed', error)
+    res.status(500).json({ message: 'failed to update goal' })
   }
-
-  res.json({ ok: true })
 })
 
 app.delete('/api/goals/:goalId', requireAuth, async (req, res) => {
@@ -397,16 +467,35 @@ app.delete('/api/goals/:goalId', requireAuth, async (req, res) => {
     return
   }
 
-  const ownedGoal = await db.get(`SELECT id FROM goals WHERE id = ? AND user_id = ?`, [goalId, req.userId])
-  if (!ownedGoal) {
-    res.status(404).json({ message: 'goal not found' })
-    return
+  try {
+    const ownedGoal = await ensureOwnedGoal(goalId, req.userId)
+    if (!ownedGoal) {
+      res.status(404).json({ message: 'goal not found' })
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('goals')
+      .delete()
+      .eq('id', goalId)
+      .eq('user_id', req.userId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      res.status(404).json({ message: 'goal not found' })
+      return
+    }
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('goal delete failed', error)
+    res.status(500).json({ message: 'failed to delete goal' })
   }
-
-  await db.run(`DELETE FROM goal_records WHERE goal_id = ?`, [goalId])
-  await db.run(`DELETE FROM goals WHERE id = ? AND user_id = ?`, [goalId, req.userId])
-
-  res.json({ ok: true })
 })
 
 app.post('/api/goals/:goalId/records', requireAuth, async (req, res) => {
@@ -418,20 +507,35 @@ app.post('/api/goals/:goalId/records', requireAuth, async (req, res) => {
     return
   }
 
-  const ownedGoal = await db.get(`SELECT id FROM goals WHERE id = ? AND user_id = ?`, [goalId, req.userId])
-  if (!ownedGoal) {
-    res.status(404).json({ message: 'goal not found' })
-    return
+  try {
+    const ownedGoal = await ensureOwnedGoal(goalId, req.userId)
+    if (!ownedGoal) {
+      res.status(404).json({ message: 'goal not found' })
+      return
+    }
+
+    const normalizedMessage = String(message ?? '').trim() || null
+
+    const { data, error } = await supabase
+      .from('goal_records')
+      .insert({
+        goal_id: goalId,
+        date,
+        level: Number(level),
+        message: normalizedMessage,
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    res.status(201).json({ id: data.id })
+  } catch (error) {
+    console.error('record create failed', error)
+    res.status(500).json({ message: 'failed to create record' })
   }
-
-  const normalizedMessage = String(message ?? '').trim() || null
-
-  const result = await db.run(
-    `INSERT INTO goal_records (goal_id, date, level, message) VALUES (?, ?, ?, ?)`,
-    [goalId, date, Number(level), normalizedMessage],
-  )
-
-  res.status(201).json({ id: result.lastID })
 })
 
 app.put('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res) => {
@@ -444,27 +548,37 @@ app.put('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res) =>
     return
   }
 
-  const ownedGoal = await db.get(`SELECT id FROM goals WHERE id = ? AND user_id = ?`, [goalId, req.userId])
-  if (!ownedGoal) {
-    res.status(404).json({ message: 'goal not found' })
-    return
+  try {
+    const ownedGoal = await ensureOwnedGoal(goalId, req.userId)
+    if (!ownedGoal) {
+      res.status(404).json({ message: 'goal not found' })
+      return
+    }
+
+    const normalizedMessage = String(message ?? '').trim() || null
+
+    const { data, error } = await supabase
+      .from('goal_records')
+      .update({ date, level: Number(level), message: normalizedMessage })
+      .eq('id', recordId)
+      .eq('goal_id', goalId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      res.status(404).json({ message: 'record not found' })
+      return
+    }
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('record update failed', error)
+    res.status(500).json({ message: 'failed to update record' })
   }
-
-  const normalizedMessage = String(message ?? '').trim() || null
-
-  const result = await db.run(
-    `UPDATE goal_records
-     SET date = ?, level = ?, message = ?
-     WHERE id = ? AND goal_id = ?`,
-    [date, Number(level), normalizedMessage, recordId, goalId],
-  )
-
-  if (!result.changes) {
-    res.status(404).json({ message: 'record not found' })
-    return
-  }
-
-  res.json({ ok: true })
 })
 
 app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res) => {
@@ -476,23 +590,37 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
     return
   }
 
-  const ownedGoal = await db.get(`SELECT id FROM goals WHERE id = ? AND user_id = ?`, [goalId, req.userId])
-  if (!ownedGoal) {
-    res.status(404).json({ message: 'goal not found' })
-    return
-  }
+  try {
+    const ownedGoal = await ensureOwnedGoal(goalId, req.userId)
+    if (!ownedGoal) {
+      res.status(404).json({ message: 'goal not found' })
+      return
+    }
 
-  const result = await db.run(`DELETE FROM goal_records WHERE id = ? AND goal_id = ?`, [recordId, goalId])
-  if (!result.changes) {
-    res.status(404).json({ message: 'record not found' })
-    return
-  }
+    const { data, error } = await supabase
+      .from('goal_records')
+      .delete()
+      .eq('id', recordId)
+      .eq('goal_id', goalId)
+      .select('id')
+      .maybeSingle()
 
-  res.json({ ok: true })
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      res.status(404).json({ message: 'record not found' })
+      return
+    }
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('record delete failed', error)
+    res.status(500).json({ message: 'failed to delete record' })
+  }
 })
 
 app.listen(port, '0.0.0.0', () => {
   console.log(`API server listening on http://0.0.0.0:${port}`)
 })
-
-

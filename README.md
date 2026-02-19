@@ -1,4 +1,4 @@
-﻿# Day4 monorepo
+# Day4 monorepo
 
 Web first (React + TypeScript + Vite), then mobile (React Native + TypeScript + Expo).
 
@@ -7,7 +7,7 @@ Web first (React + TypeScript + Vite), then mobile (React Native + TypeScript + 
 ```text
 apps/
   web/          # React + TS + Vite
-  api/          # Express + SQLite API
+  api/          # Express + Supabase API
   mobile/       # Expo app (to be initialized)
 packages/
   shared/       # shared types/utils/constants
@@ -21,6 +21,19 @@ npm run dev:web
 
 ## Run API server
 
+1. Copy `apps/api/.env.example` to `apps/api/.env`
+2. Fill these values:
+
+```text
+GOOGLE_CLIENT_ID=
+JWT_SECRET=
+API_PORT=8787
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+3. Run:
+
 ```bash
 npm run dev:api
 ```
@@ -30,6 +43,38 @@ API default address:
 ```text
 http://<server-ip>:8787/api
 ```
+
+## Supabase setup
+
+1. In Supabase SQL Editor, run `apps/api/supabase/schema.sql`
+2. Migrate existing local SQLite data (optional):
+
+```bash
+npm --workspace apps/api run migrate:supabase
+```
+
+## External chatbot input
+
+External clients should call your API (not Supabase directly).
+
+Example endpoint:
+
+```text
+POST /api/goals/:goalId/records
+Authorization: Bearer <your-app-jwt>
+```
+
+Payload:
+
+```json
+{
+  "date": "2026-02-20",
+  "level": 72.5,
+  "message": "?? ?? ??"
+}
+```
+
+## Web app API base
 
 Web app default API base is:
 
