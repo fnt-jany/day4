@@ -1,0 +1,35 @@
+:root {
+  font-family: 'Segoe UI', 'Noto Sans KR', Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #13203a;
+  background: #eef3fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid #b8c2d6;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.95;
+}
