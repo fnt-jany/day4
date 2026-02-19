@@ -16,6 +16,11 @@ type AuthMeResponse = {
   user: AuthUser
 }
 
+type AuthGuestResponse = {
+  token: string
+  user: AuthUser
+}
+
 type GoogleCredentialResponse = {
   credential?: string
 }
@@ -91,6 +96,8 @@ function App() {
       loginButtonHint: '로그인 버튼을 불러오는 중입니다...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.',
       loginFailed: '로그인에 실패했습니다. 다시 시도해 주세요.',
+      guestLogin: '???? ??',
+      guestLoginFailed: '??? ???? ??????.',
       loading: '불러오는 중...',
     },
     en: {
@@ -100,6 +107,8 @@ function App() {
       loginButtonHint: 'Loading sign-in button...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID is not configured.',
       loginFailed: 'Login failed. Please try again.',
+      guestLogin: 'Continue as Guest',
+      guestLoginFailed: 'Guest login failed.',
       loading: 'Loading...',
     },
   }[loginLanguage]
@@ -134,6 +143,19 @@ function App() {
       setErrorMessage(text.loginFailed)
     }
   }, [text.loginFailed])
+
+  const handleGuestLogin = useCallback(async () => {
+    try {
+      setErrorMessage(null)
+      const result = await requestApi<AuthGuestResponse>('/auth/guest', {
+        method: 'POST',
+      })
+      localStorage.setItem(AUTH_TOKEN_KEY, result.token)
+      setUser(result.user)
+    } catch {
+      setErrorMessage(text.guestLoginFailed)
+    }
+  }, [text.guestLoginFailed])
 
   useEffect(() => {
     void loadMe()
@@ -189,8 +211,8 @@ function App() {
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem(AUTH_TOKEN_KEY)
-    setUser(null)
     setErrorMessage(null)
+    setUser(null)
   }, [])
 
   if (isLoading) {
@@ -226,13 +248,17 @@ function App() {
           {GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
           {!GOOGLE_CLIENT_ID ? <p className="error-text">{text.missingGoogleClientId}</p> : null}
           {GOOGLE_CLIENT_ID && !isGoogleReady ? <p className="empty">{text.loginButtonHint}</p> : null}
+          <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
+            {text.guestLogin}
+          </button>
           {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
         </section>
       </main>
     )
   }
 
-  const profileName = user.name || user.email || `user-${user.id}`
+  const activeUser = user ?? { id: 0, name: 'Guest' }
+  const profileName = activeUser.name || activeUser.email || `user-${activeUser.id}`
 
   return <MainApp profileName={profileName} onLogout={handleLogout} />
 }

@@ -90,6 +90,19 @@ if (!goalColumns.some((column) => column.name === 'user_id')) {
 await db.exec(`CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id);`)
 await db.exec(`CREATE INDEX IF NOT EXISTS idx_goal_records_goal_id ON goal_records(goal_id);`)
 
+async function getOrCreateGuestUser() {
+  await db.run(
+    `INSERT INTO users (google_sub, email, name, picture_url, updated_at)
+     VALUES ('guest-mode', NULL, 'Guest', NULL, datetime('now'))
+     ON CONFLICT(google_sub) DO UPDATE SET
+       name = 'Guest',
+       updated_at = datetime('now')`,
+  )
+
+  return db.get(`SELECT id, email, name, picture_url FROM users WHERE google_sub = 'guest-mode'`)
+}
+
+
 const mapGoal = (row) => ({
   id: row.id,
   name: row.name,
@@ -197,6 +210,23 @@ async function getLanguage(userId) {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+app.post('/api/auth/guest', async (_req, res) => {
+  const user = await getOrCreateGuestUser()
+  const token = jwt.sign({ userId: user.id, sub: 'guest-mode' }, jwtSecret, {
+    expiresIn: '7d',
+  })
+
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      pictureUrl: user.picture_url ?? null,
+    },
+  })
 })
 
 app.post('/api/auth/google', async (req, res) => {
@@ -464,3 +494,5 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
 app.listen(port, '0.0.0.0', () => {
   console.log(`API server listening on http://0.0.0.0:${port}`)
 })
+
+

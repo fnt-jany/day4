@@ -788,7 +788,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   return (
-    <main className="page">      <header className="page-header">
+    <main className="page">
+      <header className="page-header">
         <h1>{text.appTitle}</h1>
         <div className="header-actions">
           <button type="button" className="primary" onClick={openCreateGoalForm}>

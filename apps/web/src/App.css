@@ -361,12 +361,6 @@ button.primary {
   min-height: 48px;
 }
 
-.user-chip {
-  margin: 4px 0 0;
-  color: #5f6c89;
-  font-size: 13px;
-}
-
 
 .profile-menu {
   position: relative;
@@ -412,4 +406,9 @@ button.primary {
 .profile-dropdown button:hover {
   background: #f2f6ff;
   border-color: #d6def1;
+}
+
+
+.guest-login-button {
+  margin-top: 10px;
 }
