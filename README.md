@@ -1,4 +1,4 @@
-# NDResolution monorepo
+﻿# Day4 monorepo
 
 Web first (React + TypeScript + Vite), then mobile (React Native + TypeScript + Expo).
 
