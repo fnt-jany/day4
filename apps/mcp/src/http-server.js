@@ -5,7 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { clearDay4McpSession, createDay4McpServer } from './day4Mcp.js'
 
 const host = process.env.MCP_HOST || '0.0.0.0'
-const port = Number(process.env.MCP_PORT || 8788)
+const port = Number(process.env.PORT || process.env.MCP_PORT || 8788)
 const path = process.env.MCP_PATH || '/mcp'
 
 const app = createMcpExpressApp({ host })
@@ -80,3 +80,4 @@ app.delete(path, async (req, res) => {
 app.listen(port, host, () => {
   console.log(`Day4 MCP HTTP server listening at http://${host}:${port}${path}`)
 })
+
