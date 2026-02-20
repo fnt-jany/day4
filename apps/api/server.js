@@ -4,6 +4,7 @@ import express from 'express'
 import jwt from 'jsonwebtoken'
 import { OAuth2Client } from 'google-auth-library'
 import { createClient } from '@supabase/supabase-js'
+import { createHash, randomBytes } from 'node:crypto'
 
 const app = express()
 const port = Number(process.env.API_PORT || 8787)
@@ -64,31 +65,133 @@ const getUserById = async (userId) => {
   }
 }
 
-async function getOrCreateGuestUser() {
-  const payload = {
-    google_sub: 'guest-mode',
-    email: null,
-    name: 'Guest',
-    picture_url: null,
-    updated_at: new Date().toISOString(),
-  }
 
-  const { error } = await supabase.from('users').upsert(payload, {
-    onConflict: 'google_sub',
-  })
+
+const getUserSetting = async (userId, key) => {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('value')
+    .eq('user_id', userId)
+    .eq('key', key)
+    .maybeSingle()
 
   if (error) {
     throw error
   }
 
-  const { data: user, error: selectError } = await supabase
+  return data?.value ?? null
+}
+
+const setUserSetting = async (userId, key, value) => {
+  const { error } = await supabase.from('user_settings').upsert(
+    {
+      user_id: userId,
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,key' },
+  )
+
+  if (error) {
+    throw error
+  }
+}
+
+const deleteUserSetting = async (userId, key) => {
+  const { error } = await supabase.from('user_settings').delete().eq('user_id', userId).eq('key', key)
+  if (error) {
+    throw error
+  }
+}
+
+const hashChatbotApiKey = (apiKey) => createHash('sha256').update(apiKey).digest('hex')
+
+const isDuplicatePrimaryKeyError = (error) => {
+  return error?.code === '23505' && String(error?.message || '').includes('_pkey')
+}
+
+const getNextId = async (table) => {
+  const { data, error } = await supabase
+    .from(table)
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    throw error
+  }
+
+  const currentMax = data && data.length > 0 ? Number(data[0].id) : 0
+  return currentMax + 1
+}
+
+const insertWithNextId = async (table, payload, maxRetries = 5) => {
+  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+    const id = await getNextId(table)
+    const { data, error } = await supabase
+      .from(table)
+      .insert({ id, ...payload })
+      .select('id')
+      .single()
+
+    if (!error) {
+      return data
+    }
+
+    if (isDuplicatePrimaryKeyError(error)) {
+      continue
+    }
+
+    throw error
+  }
+
+  throw new Error(`failed to allocate id for table ${table}`)
+}
+
+const upsertUserByGoogleSub = async ({ googleSub, email, name, pictureUrl }) => {
+  const { data: existing, error: selectError } = await supabase
     .from('users')
-    .select('id, email, name, picture_url')
-    .eq('google_sub', 'guest-mode')
-    .single()
+    .select('id')
+    .eq('google_sub', googleSub)
+    .maybeSingle()
 
   if (selectError) {
     throw selectError
+  }
+
+  if (existing) {
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        email,
+        name,
+        picture_url: pictureUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+
+    if (updateError) {
+      throw updateError
+    }
+  } else {
+    await insertWithNextId('users', {
+      google_sub: googleSub,
+      email,
+      name,
+      picture_url: pictureUrl,
+      updated_at: new Date().toISOString(),
+    })
+  }
+
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('id, email, name, picture_url')
+    .eq('google_sub', googleSub)
+    .single()
+
+  if (userError) {
+    throw userError
   }
 
   return {
@@ -97,6 +200,15 @@ async function getOrCreateGuestUser() {
     name: user.name,
     pictureUrl: user.picture_url ?? null,
   }
+}
+
+async function getOrCreateGuestUser() {
+  return upsertUserByGoogleSub({
+    googleSub: 'guest-mode',
+    email: null,
+    name: 'Guest',
+    pictureUrl: null,
+  })
 }
 
 const requireAuth = async (req, res, next) => {
@@ -126,6 +238,57 @@ const requireAuth = async (req, res, next) => {
     next()
   } catch {
     res.status(401).json({ message: 'unauthorized' })
+  }
+}
+
+const resolveUserByChatbotApiKey = async (apiKey) => {
+  if (!apiKey || !apiKey.startsWith('day4_ck_')) {
+    return null
+  }
+
+  const keyHash = hashChatbotApiKey(apiKey)
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('user_id')
+    .eq('key', 'chatbot_api_key_hash')
+    .eq('value', keyHash)
+    .limit(1)
+
+  if (error) {
+    throw error
+  }
+
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  const userId = Number(data[0].user_id)
+  if (!userId) {
+    return null
+  }
+
+  return getUserById(userId)
+}
+
+const requireChatbotAuth = async (req, res, next) => {
+  const token = getToken(req)
+  if (!token) {
+    res.status(401).json({ message: 'chatbot unauthorized' })
+    return
+  }
+
+  try {
+    const user = await resolveUserByChatbotApiKey(token)
+    if (!user) {
+      res.status(401).json({ message: 'chatbot unauthorized' })
+      return
+    }
+
+    req.userId = user.id
+    req.user = user
+    next()
+  } catch {
+    res.status(401).json({ message: 'chatbot unauthorized' })
   }
 }
 
@@ -209,7 +372,7 @@ async function getLanguage(userId) {
 const ensureOwnedGoal = async (goalId, userId) => {
   const { data, error } = await supabase
     .from('goals')
-    .select('id')
+    .select('id, name')
     .eq('id', goalId)
     .eq('user_id', userId)
     .maybeSingle()
@@ -219,6 +382,35 @@ const ensureOwnedGoal = async (goalId, userId) => {
   }
 
   return data
+}
+
+const findGoalByName = async (goalName, userId) => {
+  const normalized = String(goalName || '').trim()
+  if (!normalized) {
+    return null
+  }
+
+  const { data, error } = await supabase
+    .from('goals')
+    .select('id, name')
+    .eq('user_id', userId)
+    .eq('name', normalized)
+    .order('id', { ascending: false })
+    .limit(2)
+
+  if (error) {
+    throw error
+  }
+
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  if (data.length > 1) {
+    return { ambiguous: true }
+  }
+
+  return data[0]
 }
 
 app.get('/api/health', (_req, res) => {
@@ -266,38 +458,12 @@ app.post('/api/auth/google', async (req, res) => {
       return
     }
 
-    const userPayload = {
-      google_sub: googleSub,
+    const user = await upsertUserByGoogleSub({
+      googleSub,
       email: payload.email || null,
       name: payload.name || null,
-      picture_url: payload.picture || null,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { error: upsertError } = await supabase.from('users').upsert(userPayload, {
-      onConflict: 'google_sub',
+      pictureUrl: payload.picture || null,
     })
-
-    if (upsertError) {
-      throw upsertError
-    }
-
-    const { data: userRow, error: userError } = await supabase
-      .from('users')
-      .select('id, email, name, picture_url')
-      .eq('google_sub', googleSub)
-      .single()
-
-    if (userError) {
-      throw userError
-    }
-
-    const user = {
-      id: userRow.id,
-      email: userRow.email,
-      name: userRow.name,
-      pictureUrl: userRow.picture_url ?? null,
-    }
 
     const token = jwt.sign({ userId: user.id, sub: googleSub }, jwtSecret, {
       expiresIn: '7d',
@@ -312,6 +478,151 @@ app.post('/api/auth/google', async (req, res) => {
 
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   res.json({ user: req.user })
+})
+
+app.get('/api/chatbot/api-key', requireAuth, async (req, res) => {
+  try {
+    const [keyHash, keyPrefix, issuedAt, apiKey] = await Promise.all([
+      getUserSetting(req.userId, 'chatbot_api_key_hash'),
+      getUserSetting(req.userId, 'chatbot_api_key_prefix'),
+      getUserSetting(req.userId, 'chatbot_api_key_issued_at'),
+      getUserSetting(req.userId, 'chatbot_api_key_value'),
+    ])
+
+    res.json({
+      hasKey: Boolean(keyHash),
+      keyPrefix: keyPrefix ?? null,
+      issuedAt: issuedAt ?? null,
+      apiKey: keyHash ? apiKey ?? null : null,
+    })
+  } catch (error) {
+    console.error('chatbot api key read failed', error)
+    res.status(500).json({ message: 'failed to read chatbot api key' })
+  }
+})
+
+app.post('/api/chatbot/api-key/issue', requireAuth, async (req, res) => {
+  try {
+    const rawKey = `day4_ck_${randomBytes(24).toString('base64url')}`
+    const keyHash = hashChatbotApiKey(rawKey)
+    const keyPrefix = rawKey.slice(0, 16)
+    const issuedAt = new Date().toISOString()
+
+    await Promise.all([
+      setUserSetting(req.userId, 'chatbot_api_key_hash', keyHash),
+      setUserSetting(req.userId, 'chatbot_api_key_prefix', keyPrefix),
+      setUserSetting(req.userId, 'chatbot_api_key_issued_at', issuedAt),
+      setUserSetting(req.userId, 'chatbot_api_key_value', rawKey),
+    ])
+
+    res.json({
+      apiKey: rawKey,
+      keyPrefix,
+      issuedAt,
+      warning: 'Store this key now. It is shown only once.',
+    })
+  } catch (error) {
+    console.error('chatbot api key issue failed', error)
+    res.status(500).json({ message: 'failed to issue chatbot api key' })
+  }
+})
+
+app.delete('/api/chatbot/api-key', requireAuth, async (req, res) => {
+  try {
+    await Promise.all([
+      deleteUserSetting(req.userId, 'chatbot_api_key_hash'),
+      deleteUserSetting(req.userId, 'chatbot_api_key_prefix'),
+      deleteUserSetting(req.userId, 'chatbot_api_key_issued_at'),
+      deleteUserSetting(req.userId, 'chatbot_api_key_value'),
+    ])
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('chatbot api key revoke failed', error)
+    res.status(500).json({ message: 'failed to revoke chatbot api key' })
+  }
+})
+
+app.get('/api/chatbot/goals', requireChatbotAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('goals')
+      .select('id, name, target_date, target_level, unit')
+      .eq('user_id', req.userId)
+      .order('id', { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    res.json(
+      (data || []).map((goal) => ({
+        id: goal.id,
+        name: goal.name,
+        targetDate: goal.target_date,
+        targetLevel: goal.target_level,
+        unit: goal.unit,
+      })),
+    )
+  } catch (error) {
+    console.error('chatbot goals read failed', error)
+    res.status(500).json({ message: 'failed to read chatbot goals' })
+  }
+})
+
+app.post('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
+  const goalId = Number(req.body?.goalId)
+  const goalName = req.body?.goalName
+  const date = req.body?.date
+  const level = req.body?.level
+  const message = req.body?.message
+
+  if ((!goalId && !goalName) || !date || Number.isNaN(Number(level))) {
+    res.status(400).json({ message: 'invalid payload' })
+    return
+  }
+
+  try {
+    let goal = null
+
+    if (goalId) {
+      goal = await ensureOwnedGoal(goalId, req.userId)
+      if (!goal) {
+        res.status(404).json({ message: 'goal not found' })
+        return
+      }
+    } else {
+      const byName = await findGoalByName(goalName, req.userId)
+      if (!byName) {
+        res.status(404).json({ message: 'goal not found' })
+        return
+      }
+      if (byName.ambiguous) {
+        res.status(409).json({ message: 'goal name is ambiguous. use goalId.' })
+        return
+      }
+      goal = byName
+    }
+
+    const normalizedMessage = String(message ?? '').trim() || null
+
+    const data = await insertWithNextId('goal_records', {
+      goal_id: goal.id,
+      date,
+      level: Number(level),
+      message: normalizedMessage,
+    })
+
+    res.status(201).json({
+      ok: true,
+      goalId: goal.id,
+      goalName: goal.name,
+      recordId: data.id,
+    })
+  } catch (error) {
+    console.error('chatbot record create failed', error)
+    res.status(500).json({ message: 'failed to create chatbot record' })
+  }
 })
 
 app.get('/api/settings', requireAuth, async (req, res) => {
@@ -397,21 +708,13 @@ app.post('/api/goals', requireAuth, async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
-      .from('goals')
-      .insert({
-        name: String(name).trim(),
-        target_date: targetDate,
-        target_level: Number(targetLevel),
-        unit: String(unit).trim(),
-        user_id: req.userId,
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      throw error
-    }
+    const data = await insertWithNextId('goals', {
+      name: String(name).trim(),
+      target_date: targetDate,
+      target_level: Number(targetLevel),
+      unit: String(unit).trim(),
+      user_id: req.userId,
+    })
 
     res.status(201).json({ id: data.id })
   } catch (error) {
@@ -516,20 +819,12 @@ app.post('/api/goals/:goalId/records', requireAuth, async (req, res) => {
 
     const normalizedMessage = String(message ?? '').trim() || null
 
-    const { data, error } = await supabase
-      .from('goal_records')
-      .insert({
-        goal_id: goalId,
-        date,
-        level: Number(level),
-        message: normalizedMessage,
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      throw error
-    }
+    const data = await insertWithNextId('goal_records', {
+      goal_id: goalId,
+      date,
+      level: Number(level),
+      message: normalizedMessage,
+    })
 
     res.status(201).json({ id: data.id })
   } catch (error) {

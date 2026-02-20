@@ -68,10 +68,25 @@ type SettingsResponse = {
   language: Language
 }
 
+type ChatbotApiKeyStatusResponse = {
+  hasKey: boolean
+  keyPrefix: string | null
+  issuedAt: string | null
+  apiKey: string | null
+}
+
+type ChatbotApiKeyIssueResponse = {
+  apiKey: string
+  keyPrefix: string
+  issuedAt: string
+  warning: string
+}
+
 const TEXT = {
   ko: {
     appTitle: '작심사일',
     settings: '설정',
+    chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
     addGoal: '목표 추가',
     chartSpacingLabel: '그래프 X축 간격',
     equalSpacing: '등간격',
@@ -80,6 +95,17 @@ const TEXT = {
     korean: '한국어',
     english: '영어',
     logout: '로그아웃',
+    chatbotApiKeyTitle: '\uCC57\uBD07 API \uD0A4',
+    chatbotApiKeyDesc: '\uC678\uBD80 \uCC57\uBD07\uC5D0\uC11C \uC0C1\uD0DC \uC785\uB825 \uC2DC \uC0AC\uC6A9\uD560 \uC0AC\uC6A9\uC790 \uC804\uC6A9 \uD0A4\uC785\uB2C8\uB2E4.',
+    chatbotApiKeyIssue: '\uD0A4 \uBC1C\uAE09/\uC7AC\uBC1C\uAE09',
+    chatbotApiKeyCopy: '\uD0A4 \uBCF5\uC0AC',
+    chatbotApiKeyRevoke: '\uD0A4 \uD3D0\uAE30',
+    chatbotApiKeyMissing: '\uBC1C\uAE09\uB41C \uD0A4 \uC5C6\uC74C',
+    chatbotApiKeyActivePrefix: '\uD604\uC7AC \uD0A4 Prefix',
+    chatbotApiKeyIssuedAt: '\uBC1C\uAE09 \uC2DC\uAC01',
+    chatbotApiKeyShownOnce: '\uC544\uB798 \uD0A4\uB294 \uC9C0\uAE08 \uD55C \uBC88\uB9CC \uD45C\uC2DC\uB429\uB2C8\uB2E4. \uC548\uC804\uD55C \uACF3\uC5D0 \uC800\uC7A5\uD558\uC138\uC694.',
+    chatbotApiKeyLegacyNotice: '\uAE30\uC874 \uD0A4\uB294 \uBCF5\uAD6C\uAC00 \uBD88\uAC00\ud569\ub2c8\ub2e4. \uBCF5\uC0AC \uBC84\ud2bc\uc744 \ub204\ub974\uba74 \uc790\ub3d9 \uc7ac\ubc1c\uae09\ub429\ub2c8\ub2e4.',
+    chatbotApiKeyCopied: '\uD0A4\uAC00 \uD074\uB9BD\uBCF4\uB4DC\uC5D0 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.',
     loading: '불러오는 중...',
     goalEdit: '목표 수정',
     goalCreate: '목표 추가',
@@ -141,7 +167,19 @@ const TEXT = {
     missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID is not configured.',
     signedInAs: 'Signed in as',
     logout: 'Log out',
+    chatbotApiKeyTitle: 'Chatbot API Key',
+    chatbotApiKeyDesc: 'User-scoped key for external chatbot status updates.',
+    chatbotApiKeyIssue: 'Issue / Rotate Key',
+    chatbotApiKeyCopy: 'Copy Key',
+    chatbotApiKeyRevoke: 'Revoke Key',
+    chatbotApiKeyMissing: 'No active key',
+    chatbotApiKeyActivePrefix: 'Active key prefix',
+    chatbotApiKeyIssuedAt: 'Issued at',
+    chatbotApiKeyShownOnce: 'This full key is shown only once. Save it now.',
+    chatbotApiKeyLegacyNotice: 'Existing key cannot be recovered. Copy will rotate and issue a new key.',
+    chatbotApiKeyCopied: 'API key copied to clipboard.',
     settings: 'Settings',
+    chatbotGuide: 'Chatbot Guide',
     addGoal: 'Add Goal',
     chartSpacingLabel: 'Chart X-Axis Spacing',
     equalSpacing: 'Equal Spacing',
@@ -272,6 +310,22 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T
+}
+
+function copyToClipboardFallback(value: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+
+  if (!copied) {
+    throw new Error('copy failed')
+  }
 }
 
 function MiniTrendChart({ records, targetLevel, spacingMode, emptyLabel, ariaLabel }: MiniTrendChartProps) {
@@ -532,6 +586,12 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const [chartSpacingMode, setChartSpacingMode] = useState<ChartSpacingMode>('equal')
   const [language, setLanguage] = useState<Language>('ko')
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [chatbotKeyPrefix, setChatbotKeyPrefix] = useState<string | null>(null)
+  const [chatbotKeyIssuedAt, setChatbotKeyIssuedAt] = useState<string | null>(null)
+  const [newChatbotApiKey, setNewChatbotApiKey] = useState<string | null>(null)
+  const [isIssuingChatbotKey, setIsIssuingChatbotKey] = useState(false)
+  const [isRevokingChatbotKey, setIsRevokingChatbotKey] = useState(false)
+  const [chatbotKeyNotice, setChatbotKeyNotice] = useState<string | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
 
   const text = TEXT[language]
@@ -597,6 +657,17 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     }
   }, [language])
 
+  const loadChatbotApiKeyStatus = useCallback(async () => {
+    try {
+      const result = await requestApi<ChatbotApiKeyStatusResponse>('/chatbot/api-key')
+      setChatbotKeyPrefix(result.hasKey ? result.keyPrefix : null)
+      setChatbotKeyIssuedAt(result.hasKey ? result.issuedAt : null)
+      setNewChatbotApiKey(result.hasKey ? result.apiKey : null)
+    } catch {
+      setErrorMessage(TEXT[language].errors.loadSettings)
+    }
+  }, [language])
+
   const updateChartSpacingMode = async (mode: ChartSpacingMode) => {
     setChartSpacingMode(mode)
     try {
@@ -621,9 +692,70 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     }
   }
 
+  const issueChatbotApiKey = async () => {
+    setIsIssuingChatbotKey(true)
+    try {
+      const result = await requestApi<ChatbotApiKeyIssueResponse>('/chatbot/api-key/issue', {
+        method: 'POST',
+      })
+      setNewChatbotApiKey(result.apiKey)
+      setChatbotKeyPrefix(result.keyPrefix)
+      setChatbotKeyIssuedAt(result.issuedAt)
+    } catch {
+      setErrorMessage(text.errors.saveSettings)
+    } finally {
+      setIsIssuingChatbotKey(false)
+    }
+  }
+
+  const revokeChatbotApiKey = async () => {
+    setIsRevokingChatbotKey(true)
+    try {
+      await requestApi('/chatbot/api-key', {
+        method: 'DELETE',
+      })
+      setNewChatbotApiKey(null)
+      setChatbotKeyPrefix(null)
+      setChatbotKeyIssuedAt(null)
+    } catch {
+      setErrorMessage(text.errors.saveSettings)
+    } finally {
+      setIsRevokingChatbotKey(false)
+    }
+  }
+
+  const copyChatbotApiKey = async () => {
+    try {
+      let keyToCopy = newChatbotApiKey
+
+      if (!keyToCopy && chatbotKeyPrefix) {
+        const result = await requestApi<ChatbotApiKeyIssueResponse>('/chatbot/api-key/issue', {
+          method: 'POST',
+        })
+        keyToCopy = result.apiKey
+        setNewChatbotApiKey(result.apiKey)
+        setChatbotKeyPrefix(result.keyPrefix)
+        setChatbotKeyIssuedAt(result.issuedAt)
+      }
+
+      if (!keyToCopy) {
+        return
+      }
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(keyToCopy)
+      } else {
+        copyToClipboardFallback(keyToCopy)
+      }
+      setChatbotKeyNotice(text.chatbotApiKeyCopied)
+    } catch {
+      setErrorMessage(text.errors.saveSettings)
+    }
+  }
+
   useEffect(() => {
-    void Promise.all([loadGoals(), loadSettings()])
-  }, [loadGoals, loadSettings])
+    void Promise.all([loadGoals(), loadSettings(), loadChatbotApiKeyStatus()])
+  }, [loadGoals, loadSettings, loadChatbotApiKeyStatus])
 
   useEffect(() => {
     document.title = text.appTitle
@@ -812,6 +944,15 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                 <button
                   type="button"
                   onClick={() => {
+                    setProfileMenuOpen(false)
+                    window.open(`${window.location.origin}/#/chatbot-guide`, '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  {text.chatbotGuide}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setSettingsOpen((prev) => !prev)
                     setProfileMenuOpen(false)
                   }}
@@ -877,6 +1018,33 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
               />
               English
             </label>
+          </div>
+          <div className="chatbot-key-panel">
+            <h3>{text.chatbotApiKeyTitle}</h3>
+            <p className="empty">{text.chatbotApiKeyDesc}</p>
+            <p>{text.chatbotApiKeyActivePrefix}: {chatbotKeyPrefix ?? text.chatbotApiKeyMissing}</p>
+            <p>{text.chatbotApiKeyIssuedAt}: {chatbotKeyIssuedAt ?? '-'}</p>
+            <div className="actions">
+              <button type="button" className="primary" onClick={() => void issueChatbotApiKey()} disabled={isIssuingChatbotKey}>
+                {text.chatbotApiKeyIssue}
+              </button>
+              <button type="button" onClick={() => void copyChatbotApiKey()} disabled={!newChatbotApiKey && !chatbotKeyPrefix}>
+                {text.chatbotApiKeyCopy}
+              </button>
+              <button type="button" className="danger" onClick={() => void revokeChatbotApiKey()} disabled={isRevokingChatbotKey || !chatbotKeyPrefix}>
+                {text.chatbotApiKeyRevoke}
+              </button>
+            </div>
+            {newChatbotApiKey ? (
+              <>
+                <p className="error-text">{text.chatbotApiKeyShownOnce}</p>
+                <pre className="guide-code">{newChatbotApiKey}</pre>
+              </>
+            ) : null}
+            {!newChatbotApiKey && chatbotKeyPrefix ? (
+              <p className="empty">{text.chatbotApiKeyLegacyNotice}</p>
+            ) : null}
+            {chatbotKeyNotice ? <p className="empty">{chatbotKeyNotice}</p> : null}
           </div>
         </section>
       ) : null}
@@ -1103,6 +1271,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
+
 
 
 

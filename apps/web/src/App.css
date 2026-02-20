@@ -412,3 +412,66 @@ button.primary {
 .guest-login-button {
   margin-top: 10px;
 }
+.guide-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.guide-card {
+  width: min(760px, 100%);
+  border: 1px solid #d8dde8;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 24px;
+}
+
+.guide-card h1 {
+  margin: 0;
+}
+
+.guide-card h2 {
+  margin: 8px 0;
+}
+
+.guide-card h3 {
+  margin: 18px 0 8px;
+}
+
+.guide-code {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid #dbe2f1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.guide-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #24314f;
+}
+
+.guide-link-wrap {
+  margin-top: 10px;
+}
+.chatbot-key-panel {
+  margin-top: 14px;
+  border: 1px solid #dbe2f1;
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.chatbot-key-panel h3 {
+  margin: 0 0 8px;
+}
+
+.chatbot-key-panel p {
+  margin: 6px 0;
+}

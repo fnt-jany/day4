@@ -11,6 +11,8 @@ apps/
   mobile/       # Expo app (to be initialized)
 packages/
   shared/       # shared types/utils/constants
+docs/
+  chatbot-integration.md
 ```
 
 ## Run web app
@@ -46,33 +48,19 @@ http://<server-ip>:8787/api
 
 ## Supabase setup
 
-1. In Supabase SQL Editor, run `apps/api/supabase/schema.sql`
-2. Migrate existing local SQLite data (optional):
-
-```bash
-npm --workspace apps/api run migrate:supabase
-```
+In Supabase SQL Editor, run `apps/api/supabase/schema.sql`.
 
 ## External chatbot input
 
-External clients should call your API (not Supabase directly).
+External chatbot calls must go through your API server.
 
-Example endpoint:
+- API key status: `GET /api/chatbot/api-key` (user JWT)
+- API key issue: `POST /api/chatbot/api-key/issue` (user JWT)
+- API key revoke: `DELETE /api/chatbot/api-key` (user JWT)
+- Goal list: `GET /api/chatbot/goals` (chatbot API key)
+- Status write: `POST /api/chatbot/records` (chatbot API key)
 
-```text
-POST /api/goals/:goalId/records
-Authorization: Bearer <your-app-jwt>
-```
-
-Payload:
-
-```json
-{
-  "date": "2026-02-20",
-  "level": 72.5,
-  "message": "?? ?? ??"
-}
-```
+See full manual: `docs/chatbot-integration.md`
 
 ## Web app API base
 

@@ -11,5 +11,8 @@ coverage/
 .env.*
 !.env.example
 
+# local db cache
+*.sqlite
+
 # mobile
 .expo/

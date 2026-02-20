@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import MainApp from './MainApp'
 
 type AuthUser = {
@@ -55,6 +55,9 @@ declare global {
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:8787/api`
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const AUTH_TOKEN_KEY = 'day4_auth_token'
+const CHATBOT_GUIDE_HASH = '#/chatbot-guide'
+
+const isGuideHash = () => window.location.hash === CHATBOT_GUIDE_HASH
 
 async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {})
@@ -80,25 +83,121 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+function ChatbotGuidePage() {
+  const [language, setLanguage] = useState<'ko' | 'en'>('ko')
+
+  const text = {
+    ko: {
+      appTitle: '\uC791\uC2EC\uC0AC\uC77C',
+      pageTitle: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+      summary: '\uC678\uBD80 \uCC57\uBD07\uC774 Day4 API\uB97C \uD1B5\uD574 \uBAA9\uD45C \uC0C1\uD0DC\uB97C \uAE30\uB85D\uD558\uB294 \uBC29\uBC95\uC785\uB2C8\uB2E4.',
+      home: '\uB85C\uADF8\uC778 \uD654\uBA74\uC73C\uB85C',
+      sectionUrl: '\uCC57\uBD07\uC5D0 \uC804\uB2EC\uD560 \uAC00\uC774\uB4DC URL',
+      sectionFlow: '\uC5F0\uB3D9 \uC21C\uC11C',
+      step1: '1) Day4 \uB85C\uADF8\uC778 \uD6C4 \uB0B4 \uD1A0\uD070\uC73C\uB85C \uCC57\uBD07 \uD1A0\uD070 \uBC1C\uAE09',
+      step2: '2) \uCC57\uBD07 \uD1A0\uD070\uC73C\uB85C \uB0B4 \uBAA9\uD45C \uBAA9\uB85D \uC870\uD68C',
+      step3: '3) \uBAA9\uD45C ID\uB85C \uC0C1\uD0DC \uC785\uB825',
+      sectionEndpoints: '\uD544\uC218 API',
+      token: 'GET /api/chatbot/api-key, POST /api/chatbot/api-key/issue (in Day4 app settings)',
+      goals: 'GET /api/chatbot/goals (Authorization: Bearer <chatbot_api_key>)',
+      record: 'POST /api/chatbot/records (Authorization: Bearer <chatbot_api_key>)',
+      sampleTitle: '\uC0C1\uD0DC \uC785\uB825 \uC608\uC2DC',
+      sampleTip: 'goalId \uC0AC\uC6A9\uC744 \uAD8C\uC7A5\uD569\uB2C8\uB2E4. (\uB3D9\uBA85\uC774\uB984 \uCDA9\uB3CC \uBC29\uC9C0)',
+    },
+    en: {
+      appTitle: 'Day4',
+      pageTitle: 'Chatbot Integration Guide',
+      summary: 'How external chatbots can write goal status records through Day4 API.',
+      home: 'Back to login',
+      sectionUrl: 'Guide URL to share with chatbot',
+      sectionFlow: 'Integration flow',
+      step1: '1) Issue a user-scoped chatbot API key in Day4 settings',
+      step2: '2) Use chatbot API key to fetch my goal list',
+      step3: '3) Write status by goal ID',
+      sectionEndpoints: 'Required APIs',
+      token: 'GET /api/chatbot/api-key, POST /api/chatbot/api-key/issue (in Day4 app settings)',
+      goals: 'GET /api/chatbot/goals (Authorization: Bearer <chatbot_api_key>)',
+      record: 'POST /api/chatbot/records (Authorization: Bearer <chatbot_api_key>)',
+      sampleTitle: 'Record payload example',
+      sampleTip: 'Use goalId to avoid duplicate-name ambiguity.',
+    },
+  }[language]
+
+  const guideUrl = `${window.location.origin}/${CHATBOT_GUIDE_HASH}`
+
+  return (
+    <main className="guide-page">
+      <section className="guide-card">
+        <h1>{text.appTitle}</h1>
+        <h2>{text.pageTitle}</h2>
+        <p>{text.summary}</p>
+
+        <div className="settings-row auth-lang-row">
+          <label className="settings-option">
+            <input type="radio" name="guide-language" checked={language === 'ko'} onChange={() => setLanguage('ko')} />
+            {'\uD55C\uAD6D\uC5B4'}
+          </label>
+          <label className="settings-option">
+            <input type="radio" name="guide-language" checked={language === 'en'} onChange={() => setLanguage('en')} />
+            English
+          </label>
+        </div>
+
+        <h3>{text.sectionUrl}</h3>
+        <pre className="guide-code">{guideUrl}</pre>
+
+        <h3>{text.sectionFlow}</h3>
+        <ul className="guide-list">
+          <li>{text.step1}</li>
+          <li>{text.step2}</li>
+          <li>{text.step3}</li>
+        </ul>
+
+        <h3>{text.sectionEndpoints}</h3>
+        <ul className="guide-list">
+          <li>{text.token}</li>
+          <li>{text.goals}</li>
+          <li>{text.record}</li>
+        </ul>
+
+        <h3>{text.sampleTitle}</h3>
+        <pre className="guide-code">{`{
+  "goalId": 12,
+  "date": "2026-02-20",
+  "level": 72.5,
+  "message": "today progress"
+}`}</pre>
+        <p className="empty">{text.sampleTip}</p>
+
+        <p>
+          <a href="#/">{text.home}</a>
+        </p>
+      </section>
+    </main>
+  )
+}
+
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const [loginLanguage, setLoginLanguage] = useState<'ko' | 'en'>('ko')
+  const [guideRoute, setGuideRoute] = useState(isGuideHash())
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
 
   const text = {
     ko: {
-      appTitle: '작심사일',
-      loginTitle: 'Google 로그인',
-      loginDescription: '구글 계정으로 로그인하면 내 목표/설정이 분리되어 관리됩니다.',
-      loginButtonHint: '로그인 버튼을 불러오는 중입니다...',
-      missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.',
-      loginFailed: '로그인에 실패했습니다. 다시 시도해 주세요.',
+      appTitle: '\uC791\uC2EC\uC0AC\uC77C',
+      loginTitle: 'Google \uB85C\uADF8\uC778',
+      loginDescription: '\uAD6C\uAE00 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD558\uBA74 \uB0B4 \uBAA9\uD45C/\uC124\uC815\uC774 \uBD84\uB9AC\uB418\uC5B4 \uAD00\uB9AC\uB429\uB2C8\uB2E4.',
+      loginButtonHint: '\uB85C\uADF8\uC778 \uBC84\uD2BC\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...',
+      missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.',
+      loginFailed: '\uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.',
       guestLogin: '\uAC8C\uC2A4\uD2B8\uB85C \uB85C\uADF8\uC778',
       guestLoginFailed: '\uAC8C\uC2A4\uD2B8 \uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
-      loading: '불러오는 중...',
+      chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+      loading: '\uBD88\uB7EC\uC624\uB294 \uC911...',
     },
     en: {
       appTitle: 'Day4',
@@ -109,6 +208,7 @@ function App() {
       loginFailed: 'Login failed. Please try again.',
       guestLogin: 'Continue as Guest',
       guestLoginFailed: 'Guest login failed.',
+      chatbotGuide: 'Chatbot Integration Guide',
       loading: 'Loading...',
     },
   }[loginLanguage]
@@ -158,11 +258,24 @@ function App() {
   }, [text.guestLoginFailed])
 
   useEffect(() => {
-    void loadMe()
-  }, [loadMe])
+    const onHashChange = () => setGuideRoute(isGuideHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   useEffect(() => {
-    if (user || !GOOGLE_CLIENT_ID) {
+    if (guideRoute) {
+      document.title = loginLanguage === 'ko'
+        ? '\uC791\uC2EC\uC0AC\uC77C - \uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC'
+        : 'Day4 - Chatbot Integration Guide'
+      return
+    }
+
+    void loadMe()
+  }, [guideRoute, loadMe, loginLanguage])
+
+  useEffect(() => {
+    if (guideRoute || user || !GOOGLE_CLIENT_ID) {
       return
     }
 
@@ -203,17 +316,24 @@ function App() {
     }, 250)
 
     return () => window.clearInterval(timer)
-  }, [handleGoogleCredential, user])
+  }, [guideRoute, handleGoogleCredential, user])
 
   useEffect(() => {
+    if (guideRoute) {
+      return
+    }
     document.title = user ? 'Day4' : `${text.appTitle} - ${text.loginTitle}`
-  }, [text.appTitle, text.loginTitle, user])
+  }, [guideRoute, text.appTitle, text.loginTitle, user])
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem(AUTH_TOKEN_KEY)
     setErrorMessage(null)
     setUser(null)
   }, [])
+
+  if (guideRoute) {
+    return <ChatbotGuidePage />
+  }
 
   if (isLoading) {
     return (
@@ -237,7 +357,7 @@ function App() {
           <div className="settings-row auth-lang-row">
             <label className="settings-option">
               <input type="radio" name="auth-language" checked={loginLanguage === 'ko'} onChange={() => setLoginLanguage('ko')} />
-              한국어
+              {'\uD55C\uAD6D\uC5B4'}
             </label>
             <label className="settings-option">
               <input type="radio" name="auth-language" checked={loginLanguage === 'en'} onChange={() => setLoginLanguage('en')} />
@@ -251,6 +371,9 @@ function App() {
           <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
             {text.guestLogin}
           </button>
+          <p className="guide-link-wrap">
+            <a href={CHATBOT_GUIDE_HASH}>{text.chatbotGuide}</a>
+          </p>
           {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
         </section>
       </main>
