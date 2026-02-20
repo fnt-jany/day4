@@ -755,6 +755,21 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     document.title = text.appTitle
   }, [text.appTitle])
 
+  const scrollGoalIntoView = (goalId: number) => {
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(`goal-${goalId}`)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+  const scrollRecordIntoView = (recordId: number) => {
+    const scroll = () => {
+      const target = document.getElementById(`record-${recordId}`)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+
+    scroll()
+    window.requestAnimationFrame(scroll)
+  }
   const openCreateGoalForm = () => {
     if (goalFormOpen && editingGoalId === null) {
       closeGoalForm()
@@ -777,6 +792,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       return
     }
 
+    scrollGoalIntoView(goal.id)
     setEditingGoalId(goal.id)
     setGoalForm({
       name: goal.name,
@@ -854,6 +870,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       return
     }
 
+    scrollGoalIntoView(goal.id)
     setInputGoalId(goal.id)
     setEditingInputId(null)
     setInputForm({
@@ -869,6 +886,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       return
     }
 
+    scrollRecordIntoView(record.id)
     setInputGoalId(goalId)
     setEditingInputId(record.id)
     setInputForm({
@@ -938,6 +956,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const openRecordView = (goalId: number) => {
+    scrollGoalIntoView(goalId)
     setRecordGoalId((prev) => (prev === goalId ? null : goalId))
   }
 
@@ -1153,7 +1172,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
               const latestInput = getLatestRecord(goal.inputs)
 
               return (
-                <li key={goal.id} className="goal-item">
+                <li id={`goal-${goal.id}`} key={goal.id} className="goal-item">
                   <div className="goal-top">
                     <div className="goal-meta">
                       <div className="goal-main">
@@ -1337,7 +1356,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                           <ul className="record-list">
                             {[...getRecordsByDateAsc(goal.inputs)].reverse().map((record) => (
                               <Fragment key={record.id}>
-                                <li className="record-item">
+                                <li id={`record-${record.id}`} className="record-item">
                                   <div className="record-text">
                                     <span>
                                       {record.date} - {record.level} {goal.unit}
@@ -1418,6 +1437,11 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
+
+
+
+
 
 
 
