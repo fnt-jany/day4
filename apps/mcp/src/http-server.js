@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { clearDay4McpSession, createDay4McpServer } from './day4Mcp.js'
+import { createDay4McpServer } from './day4Mcp.js'
 
 const host = process.env.MCP_HOST || '0.0.0.0'
 const port = Number(process.env.PORT || process.env.MCP_PORT || 8788)
@@ -24,7 +24,6 @@ app.post(path, async (req, res) => {
 
       transport.onclose = () => {
         if (transport?.sessionId) {
-          clearDay4McpSession(transport.sessionId)
           transports.delete(transport.sessionId)
         }
       }
@@ -78,6 +77,5 @@ app.delete(path, async (req, res) => {
 })
 
 app.listen(port, host, () => {
-  console.log(`Day4 MCP HTTP server listening at http://${host}:${port}${path}`)
+  console.log(`Day4 MCP HTTP server listening on ${host}:${port}${path}`)
 })
-

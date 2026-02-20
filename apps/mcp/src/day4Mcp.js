@@ -9,23 +9,9 @@ if (!rawBase) {
 }
 
 const apiBase = rawBase.replace(/\/+$/, '')
-const sessionChatbotApiKeys = new Map()
-
-function normalizeSessionId(sessionId) {
-  return sessionId || 'default'
-}
 
 function validateChatbotApiKey(apiKey) {
   return typeof apiKey === 'string' && apiKey.startsWith('day4_ck_')
-}
-
-function resolveChatbotApiKey({ explicitApiKey, sessionId }) {
-  if (explicitApiKey) {
-    return explicitApiKey
-  }
-
-  const scopedSessionId = normalizeSessionId(sessionId)
-  return sessionChatbotApiKeys.get(scopedSessionId) ?? null
 }
 
 async function requestDay4(path, apiKey, init = {}) {
@@ -68,92 +54,25 @@ function toTextResult(payload) {
   }
 }
 
-function chatbotKeyHint() {
-  return {
-    ok: false,
-    error: 'No chatbot API key is configured for this session. Call set_chatbot_api_key first, or pass apiKey in this tool input.',
-  }
-}
-
-export function clearDay4McpSession(sessionId) {
-  const scopedSessionId = normalizeSessionId(sessionId)
-  sessionChatbotApiKeys.delete(scopedSessionId)
-}
-
 export function createDay4McpServer() {
   const server = new McpServer({
     name: 'day4-mcp',
-    version: '0.3.1',
+    version: '0.4.0',
   })
 
   server.tool(
-    'set_chatbot_api_key',
-    'Set the Day4 chatbot API key for this MCP session.',
+    'list_goals',
+    'List current user goals. apiKey(day4_ck_...) is required.',
     {
       apiKey: z.string().min(12),
     },
-    async ({ apiKey }, extra) => {
-      if (!validateChatbotApiKey(apiKey)) {
-        return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
-      }
-
-      const scopedSessionId = normalizeSessionId(extra?.sessionId)
-      sessionChatbotApiKeys.set(scopedSessionId, apiKey)
-
-      return toTextResult({
-        ok: true,
-        sessionId: scopedSessionId,
-        keyPrefix: apiKey.slice(0, 16),
-        message: 'Chatbot API key saved for this MCP session.',
-      })
-    },
-  )
-
-  server.tool(
-    'clear_chatbot_api_key',
-    'Clear the Day4 chatbot API key from this MCP session.',
-    {},
-    async (_, extra) => {
-      const scopedSessionId = normalizeSessionId(extra?.sessionId)
-      const hadKey = sessionChatbotApiKeys.delete(scopedSessionId)
-      return toTextResult({ ok: true, sessionId: scopedSessionId, hadKey })
-    },
-  )
-
-  server.tool(
-    'chatbot_api_key_status',
-    'Show whether this session has a configured key.',
-    {},
-    async (_, extra) => {
-      const scopedSessionId = normalizeSessionId(extra?.sessionId)
-      const sessionKey = sessionChatbotApiKeys.get(scopedSessionId)
-      return toTextResult({
-        ok: true,
-        sessionId: scopedSessionId,
-        hasSessionKey: Boolean(sessionKey),
-        sessionKeyPrefix: sessionKey ? sessionKey.slice(0, 16) : null,
-      })
-    },
-  )
-
-  server.tool(
-    'list_goals',
-    'List current user goals from Day4 chatbot API key scope.',
-    {
-      apiKey: z.string().min(12).optional(),
-    },
-    async ({ apiKey }, extra) => {
+    async ({ apiKey }) => {
       try {
-        const resolvedApiKey = resolveChatbotApiKey({ explicitApiKey: apiKey, sessionId: extra?.sessionId })
-        if (!resolvedApiKey) {
-          return toTextResult(chatbotKeyHint())
-        }
-
-        if (!validateChatbotApiKey(resolvedApiKey)) {
+        if (!validateChatbotApiKey(apiKey)) {
           return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
         }
 
-        const goals = await requestDay4('/goals', resolvedApiKey, { method: 'GET' })
+        const goals = await requestDay4('/goals', apiKey, { method: 'GET' })
         return toTextResult({ ok: true, count: Array.isArray(goals) ? goals.length : 0, goals })
       } catch (error) {
         return toTextResult({ ok: false, error: String(error?.message || error) })
@@ -163,31 +82,26 @@ export function createDay4McpServer() {
 
   server.tool(
     'add_goal_record',
-    'Add a status record to a goal by goalId or goalName. Provide date(YYYY-MM-DD), level(number), and optional message.',
+    'Add a status record to a goal. apiKey(day4_ck_...) is required.',
     {
-      apiKey: z.string().min(12).optional(),
+      apiKey: z.string().min(12),
       goalId: z.number().int().positive().optional(),
       goalName: z.string().trim().min(1).optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format.'),
       level: z.number(),
       message: z.string().trim().max(500).optional(),
     },
-    async ({ apiKey, goalId, goalName, date, level, message }, extra) => {
+    async ({ apiKey, goalId, goalName, date, level, message }) => {
       if (!goalId && !goalName) {
         return toTextResult({ ok: false, error: 'Either goalId or goalName is required.' })
       }
 
       try {
-        const resolvedApiKey = resolveChatbotApiKey({ explicitApiKey: apiKey, sessionId: extra?.sessionId })
-        if (!resolvedApiKey) {
-          return toTextResult(chatbotKeyHint())
-        }
-
-        if (!validateChatbotApiKey(resolvedApiKey)) {
+        if (!validateChatbotApiKey(apiKey)) {
           return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
         }
 
-        const created = await requestDay4('/records', resolvedApiKey, {
+        const created = await requestDay4('/records', apiKey, {
           method: 'POST',
           body: JSON.stringify({ goalId, goalName, date, level, message }),
         })

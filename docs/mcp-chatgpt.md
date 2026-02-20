@@ -2,17 +2,12 @@
 
 This MCP server lets ChatGPT call Day4 chatbot endpoints.
 
-It supports multi-user usage by storing each user's chatbot key in that MCP session.
+The server is stateless for user auth: each tool call must include `apiKey` (`day4_ck_...`).
 
 ## Tools
 
-- `set_chatbot_api_key`: save current user's Day4 chatbot API key in this MCP session
-- `chatbot_api_key_status`: check key status for this session
-- `clear_chatbot_api_key`: remove key from this session
-- `list_goals`: list goals for the current session key
-- `add_goal_record`: add a status record for the current session key
-
-`list_goals` and `add_goal_record` also accept optional `apiKey` input for one-off calls.
+- `list_goals`: list goals for the provided `apiKey`
+- `add_goal_record`: add a status record for the provided `apiKey`
 
 ## Environment
 
@@ -56,9 +51,7 @@ http://localhost:8788/mcp
 
 ## ChatGPT usage flow
 
-1. Call `set_chatbot_api_key` with your own `day4_ck_...` key.
-2. Call `list_goals`.
-3. Call `add_goal_record`.
-4. Optionally call `clear_chatbot_api_key` when done.
+1. Call `list_goals` with `{ "apiKey": "day4_ck_..." }`.
+2. Call `add_goal_record` with `apiKey` included in input.
 
 For ChatGPT remote MCP, use HTTPS domain URL (not plain HTTP IP) when required by platform policy.

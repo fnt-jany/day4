@@ -97,6 +97,8 @@ http://223.130.147.188:8788/mcp
 
 ChatGPT MCP setup guide: `docs/mcp-chatgpt.md`
 
+MCP tools are stateless. Pass `apiKey` in each tool call.
+
 ## Web app API base
 
 Web app default API base is:
@@ -128,3 +130,5 @@ Then install workspace dependencies again:
 ```bash
 npm install
 ```
+
+
