@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 
@@ -120,6 +120,8 @@ const TEXT = {
     save: '저장',
     cancel: '취소',
     delete: '삭제',
+    confirmDeleteGoal: '이 목표를 삭제할까요?',
+    confirmDeleteRecord: '이 기록을 삭제할까요?',
     statusInput: '상태 입력',
     recordEdit: '기록 수정',
     date: '날짜',
@@ -202,6 +204,8 @@ const TEXT = {
     save: 'Save',
     cancel: 'Cancel',
     delete: 'Delete',
+    confirmDeleteGoal: 'Delete this goal?',
+    confirmDeleteRecord: 'Delete this record?',
     statusInput: 'Enter Status',
     recordEdit: 'Edit Record',
     date: 'Date',
@@ -617,20 +621,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     [goals, inputGoalId],
   )
 
-  const editingTargetGoal = useMemo(
-    () => goals.find((goal) => goal.id === editingGoalId) ?? null,
-    [goals, editingGoalId],
-  )
 
-  const recordTargetGoal = useMemo(
-    () => goals.find((goal) => goal.id === recordGoalId) ?? null,
-    [goals, recordGoalId],
-  )
 
-  const sortedRecords = useMemo(
-    () => (recordTargetGoal ? getRecordsByDateAsc(recordTargetGoal.inputs) : []),
-    [recordTargetGoal],
-  )
 
   const loadGoals = useCallback(async () => {
     setIsLoading(true)
@@ -764,6 +756,11 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }, [text.appTitle])
 
   const openCreateGoalForm = () => {
+    if (goalFormOpen && editingGoalId === null) {
+      closeGoalForm()
+      return
+    }
+
     setEditingGoalId(null)
     setGoalForm({
       name: '',
@@ -775,6 +772,11 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const openEditGoalForm = (goal: Goal) => {
+    if (editingGoalId === goal.id) {
+      closeGoalForm()
+      return
+    }
+
     setEditingGoalId(goal.id)
     setGoalForm({
       name: goal.name,
@@ -782,7 +784,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       targetLevel: String(goal.targetLevel),
       unit: goal.unit,
     })
-    setGoalFormOpen(true)
+    setGoalFormOpen(false)
   }
 
   const closeGoalForm = () => {
@@ -833,6 +835,10 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       return
     }
 
+    if (!window.confirm(text.confirmDeleteGoal)) {
+      return
+    }
+
     try {
       await requestApi(`/goals/${editingGoalId}`, { method: 'DELETE' })
       closeGoalForm()
@@ -843,6 +849,11 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const openInputForm = (goal: Goal) => {
+    if (inputGoalId === goal.id && editingInputId === null) {
+      closeInputForm()
+      return
+    }
+
     setInputGoalId(goal.id)
     setEditingInputId(null)
     setInputForm({
@@ -853,6 +864,11 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const openInputEditForm = (goalId: number, record: GoalInput) => {
+    if (inputGoalId === goalId && editingInputId === record.id) {
+      closeInputForm()
+      return
+    }
+
     setInputGoalId(goalId)
     setEditingInputId(record.id)
     setInputForm({
@@ -909,6 +925,10 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const handleDeleteRecord = async (goalId: number, recordId: number) => {
+    if (!window.confirm(text.confirmDeleteRecord)) {
+      return
+    }
+
     try {
       await requestApi(`/goals/${goalId}/records/${recordId}`, { method: 'DELETE' })
       await loadGoals()
@@ -918,7 +938,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const openRecordView = (goalId: number) => {
-    setRecordGoalId(goalId)
+    setRecordGoalId((prev) => (prev === goalId ? null : goalId))
   }
 
   return (
@@ -1065,7 +1085,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
       {goalFormOpen && (
         <section className="panel" aria-label="goal-form">
-          <h2>{editingTargetGoal ? text.goalEdit : text.goalCreate}</h2>
+          <h2>{text.goalCreate}</h2>
           <form className="form-grid" onSubmit={handleGoalSubmit}>
             <label>
               {text.name}
@@ -1116,110 +1136,9 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
               <button type="button" onClick={closeGoalForm}>
                 {text.cancel}
               </button>
-              {editingTargetGoal ? (
-                <button type="button" className="danger" onClick={() => void handleDeleteGoal()}>
-                  {text.delete}
-                </button>
-              ) : null}
+
             </div>
           </form>
-        </section>
-      )}
-
-      {inputTargetGoal && (
-        <section className="panel" aria-label="input-form">
-          <h2>
-            {inputTargetGoal.name} - {editingInputId === null ? text.statusInput : text.recordEdit}
-          </h2>
-          <form className="form-grid" onSubmit={handleInputSubmit}>
-            <label>
-              {text.date}
-              <input
-                type="date"
-                value={inputForm.date}
-                onChange={(event) => setInputForm((prev) => ({ ...prev, date: event.target.value }))}
-                required
-              />
-            </label>
-
-            <label>
-              {text.currentLevel} ({inputTargetGoal.unit})
-              <input
-                type="number"
-                step="any"
-                value={inputForm.level}
-                onChange={(event) => setInputForm((prev) => ({ ...prev, level: event.target.value }))}
-                placeholder={`e.g. 3 (${inputTargetGoal.unit})`}
-                required
-              />
-            </label>
-
-            <label className="full-width">
-              {text.messageOptional}
-              <textarea
-                rows={3}
-                value={inputForm.message}
-                onChange={(event) => setInputForm((prev) => ({ ...prev, message: event.target.value }))}
-                placeholder={text.messagePlaceholder}
-              />
-            </label>
-
-            <div className="actions">
-              <button type="submit" className="primary">
-                {editingInputId === null ? text.saveInput : text.saveEdit}
-              </button>
-              <button type="button" onClick={closeInputForm}>
-                {text.cancel}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {recordTargetGoal && (
-        <section className="panel" aria-label="record-view">
-          <div className="record-header">
-            <h2>{recordTargetGoal.name} - {text.recordView}</h2>
-            <button type="button" onClick={() => setRecordGoalId(null)}>
-              {text.close}
-            </button>
-          </div>
-
-          <TrendChart
-            records={sortedRecords}
-            targetLevel={recordTargetGoal.targetLevel}
-            unit={recordTargetGoal.unit}
-            spacingMode={chartSpacingMode}
-            text={text}
-          />
-
-          <div className="record-list-wrap">
-            <h3>{text.recordList}</h3>
-            {sortedRecords.length === 0 ? (
-              <p className="empty">{text.noRecords}</p>
-            ) : (
-              <ul className="record-list">
-                {[...sortedRecords].reverse().map((record) => (
-                  <li key={record.id} className="record-item">
-                    <div className="record-text">
-                      <span>
-                        {record.date} - {record.level} {recordTargetGoal.unit}
-                      </span>
-                      {record.message ? <span className="record-message">{record.message}</span> : null}
-                    </div>
-                    <div className="record-actions">
-                      <button type="button" onClick={() => openInputEditForm(recordTargetGoal.id, record)}>
-                        {text.edit}
-                      </button>
-                      <button type="button" onClick={() => void handleDeleteRecord(recordTargetGoal.id, record.id)}>
-                        {text.delete}
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </section>
       )}
 
@@ -1235,42 +1154,259 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
               return (
                 <li key={goal.id} className="goal-item">
-                  <div className="goal-meta">
-                    <div className="goal-main">
-                      <strong>{goal.name}</strong>
-                      <p>
-                        {text.goalPrefix} {goal.targetLevel} {goal.unit} ({goal.targetDate})
-                      </p>
-                      {latestInput ? (
+                  <div className="goal-top">
+                    <div className="goal-meta">
+                      <div className="goal-main">
+                        <strong>{goal.name}</strong>
                         <p>
-                          {text.latestInput} {latestInput.level} {goal.unit} ({latestInput.date})
+                          {text.goalPrefix} {goal.targetLevel} {goal.unit} ({goal.targetDate})
                         </p>
-                      ) : (
-                        <p>
-                          {text.latestInput} {text.none}
-                        </p>
-                      )}
+                        {latestInput ? (
+                          <p>
+                            {text.latestInput} {latestInput.level} {goal.unit} ({latestInput.date})
+                          </p>
+                        ) : (
+                          <p>
+                            {text.latestInput} {text.none}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="mini-chart-trigger"
+                        onClick={() => openRecordView(goal.id)}
+                        aria-label={`${goal.name} ${text.viewRecords}`}
+                        title={text.viewRecords}
+                      >
+                        <MiniTrendChart
+                          records={goal.inputs}
+                          targetLevel={goal.targetLevel}
+                          spacingMode={chartSpacingMode}
+                          emptyLabel={text.miniNoRecords}
+                          ariaLabel={text.miniProgressChartAria}
+                        />
+                      </button>
                     </div>
-                    <MiniTrendChart
-                      records={goal.inputs}
-                      targetLevel={goal.targetLevel}
-                      spacingMode={chartSpacingMode}
-                      emptyLabel={text.miniNoRecords}
-                      ariaLabel={text.miniProgressChartAria}
-                    />
+
+                    <div className="goal-actions">
+                      <button type="button" className="primary" onClick={() => openInputForm(goal)}>
+                        {text.enterStatus}
+                      </button>
+                      <button type="button" onClick={() => openRecordView(goal.id)}>
+                        {text.viewRecords}
+                      </button>
+                      <button type="button" onClick={() => openEditGoalForm(goal)}>
+                        {text.edit}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="goal-actions">
-                    <button type="button" className="primary" onClick={() => openInputForm(goal)}>
-                      {text.enterStatus}
-                    </button>
-                    <button type="button" onClick={() => openRecordView(goal.id)}>
-                      {text.viewRecords}
-                    </button>
-                    <button type="button" onClick={() => openEditGoalForm(goal)}>
-                      {text.edit}
-                    </button>
-                  </div>
+                  {editingGoalId === goal.id ? (
+                    <section className="panel goal-detail-panel goal-edit-inline" aria-label="goal-edit-inline">
+                      <h2>{goal.name} - {text.goalEdit}</h2>
+                      <form className="form-grid" onSubmit={handleGoalSubmit}>
+                        <label>
+                          {text.name}
+                          <input
+                            value={goalForm.name}
+                            onChange={(event) => setGoalForm((prev) => ({ ...prev, name: event.target.value }))}
+                            placeholder={text.namePlaceholder}
+                            required
+                          />
+                        </label>
+
+                        <label>
+                          {text.targetDate}
+                          <input
+                            type="date"
+                            value={goalForm.targetDate}
+                            onChange={(event) => setGoalForm((prev) => ({ ...prev, targetDate: event.target.value }))}
+                            required
+                          />
+                        </label>
+
+                        <label>
+                          {text.targetLevel}
+                          <input
+                            type="number"
+                            step="any"
+                            value={goalForm.targetLevel}
+                            onChange={(event) => setGoalForm((prev) => ({ ...prev, targetLevel: event.target.value }))}
+                            placeholder={text.targetLevelPlaceholder}
+                            required
+                          />
+                        </label>
+
+                        <label>
+                          {text.unit}
+                          <input
+                            value={goalForm.unit}
+                            onChange={(event) => setGoalForm((prev) => ({ ...prev, unit: event.target.value }))}
+                            placeholder={text.unitPlaceholder}
+                            required
+                          />
+                        </label>
+
+                        <div className="actions">
+                          <button type="submit" className="primary">
+                            {text.save}
+                          </button>
+                          <button type="button" onClick={closeGoalForm}>
+                            {text.cancel}
+                          </button>
+                          <button type="button" className="danger" onClick={() => void handleDeleteGoal()}>
+                            {text.delete}
+                          </button>
+                        </div>
+                      </form>
+                    </section>
+                  ) : null}
+
+                  {inputGoalId === goal.id && editingInputId === null ? (
+                    <section className="panel goal-detail-panel" aria-label="input-form">
+                      <h2>
+                        {goal.name} - {editingInputId === null ? text.statusInput : text.recordEdit}
+                      </h2>
+                      <form className="form-grid" onSubmit={handleInputSubmit}>
+                        <label>
+                          {text.date}
+                          <input
+                            type="date"
+                            value={inputForm.date}
+                            onChange={(event) => setInputForm((prev) => ({ ...prev, date: event.target.value }))}
+                            required
+                          />
+                        </label>
+
+                        <label>
+                          {text.currentLevel} ({goal.unit})
+                          <input
+                            type="number"
+                            step="any"
+                            value={inputForm.level}
+                            onChange={(event) => setInputForm((prev) => ({ ...prev, level: event.target.value }))}
+                            placeholder={`e.g. 3 (${goal.unit})`}
+                            required
+                          />
+                        </label>
+
+                        <label className="full-width">
+                          {text.messageOptional}
+                          <textarea
+                            rows={3}
+                            value={inputForm.message}
+                            onChange={(event) => setInputForm((prev) => ({ ...prev, message: event.target.value }))}
+                            placeholder={text.messagePlaceholder}
+                          />
+                        </label>
+
+                        <div className="actions">
+                          <button type="submit" className="primary">
+                            {editingInputId === null ? text.saveInput : text.saveEdit}
+                          </button>
+                          <button type="button" onClick={closeInputForm}>
+                            {text.cancel}
+                          </button>
+                        </div>
+                      </form>
+                    </section>
+                  ) : null}
+
+                  {recordGoalId === goal.id ? (
+                    <section className="panel goal-detail-panel" aria-label="record-view">
+                      <div className="record-header">
+                        <h2>{goal.name} - {text.recordView}</h2>
+                        <button type="button" onClick={() => setRecordGoalId(null)}>
+                          {text.close}
+                        </button>
+                      </div>
+
+                      <TrendChart
+                        records={getRecordsByDateAsc(goal.inputs)}
+                        targetLevel={goal.targetLevel}
+                        unit={goal.unit}
+                        spacingMode={chartSpacingMode}
+                        text={text}
+                      />
+
+                      <div className="record-list-wrap">
+                        <h3>{text.recordList}</h3>
+                        {goal.inputs.length === 0 ? (
+                          <p className="empty">{text.noRecords}</p>
+                        ) : (
+                          <ul className="record-list">
+                            {[...getRecordsByDateAsc(goal.inputs)].reverse().map((record) => (
+                              <Fragment key={record.id}>
+                                <li className="record-item">
+                                  <div className="record-text">
+                                    <span>
+                                      {record.date} - {record.level} {goal.unit}
+                                    </span>
+                                    {record.message ? <span className="record-message">{record.message}</span> : null}
+                                  </div>
+                                  <div className="record-actions">
+                                    <button type="button" onClick={() => openInputEditForm(goal.id, record)}>
+                                      {text.edit}
+                                    </button>
+                                    <button type="button" onClick={() => void handleDeleteRecord(goal.id, record.id)}>
+                                      {text.delete}
+                                    </button>
+                                  </div>
+                                </li>
+
+                                {inputGoalId === goal.id && editingInputId === record.id ? (
+                                  <li className="record-edit-inline">
+                                    <form className="form-grid" onSubmit={handleInputSubmit}>
+                                      <label>
+                                        {text.date}
+                                        <input
+                                          type="date"
+                                          value={inputForm.date}
+                                          onChange={(event) => setInputForm((prev) => ({ ...prev, date: event.target.value }))}
+                                          required
+                                        />
+                                      </label>
+
+                                      <label>
+                                        {text.currentLevel} ({goal.unit})
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          value={inputForm.level}
+                                          onChange={(event) => setInputForm((prev) => ({ ...prev, level: event.target.value }))}
+                                          placeholder={`e.g. 3 (${goal.unit})`}
+                                          required
+                                        />
+                                      </label>
+
+                                      <label className="full-width">
+                                        {text.messageOptional}
+                                        <textarea
+                                          rows={3}
+                                          value={inputForm.message}
+                                          onChange={(event) => setInputForm((prev) => ({ ...prev, message: event.target.value }))}
+                                          placeholder={text.messagePlaceholder}
+                                        />
+                                      </label>
+
+                                      <div className="actions">
+                                        <button type="submit" className="primary">
+                                          {text.saveEdit}
+                                        </button>
+                                        <button type="button" onClick={closeInputForm}>
+                                          {text.cancel}
+                                        </button>
+                                      </div>
+                                    </form>
+                                  </li>
+                                ) : null}
+                              </Fragment>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </section>
+                  ) : null}
                 </li>
               )
             })}
@@ -1282,6 +1418,16 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
+
+
+
+
+
+
+
+
+
 
 
 

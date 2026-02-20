@@ -36,25 +36,82 @@ HTTP mode (URL-based MCP clients like ChatGPT MCP URL input):
 npm --workspace apps/mcp run start:http
 ```
 
-## MCP server URL
-
-If this machine public IP is `223.130.147.188` and `MCP_PORT=8788`, set MCP Server URL to:
+## MCP server URL (current)
 
 ```text
-http://223.130.147.188:8788/mcp
+https://day4-mcp.onrender.com/mcp
 ```
 
-If using local only:
+## ChatGPT Web setup (Developer Mode)
+
+1. In ChatGPT Web, click your profile (top-right).
+2. Go to Settings -> Apps -> Advanced settings -> Developer mode -> Build app.
+3. In the app builder, open MCP settings and add an MCP server.
+4. Enter MCP server URL:
 
 ```text
-http://localhost:8788/mcp
+https://day4-mcp.onrender.com/mcp
 ```
 
-## ChatGPT usage flow
+5. Authentication method: select `Unrestricted (None)`.
+6. Save and reconnect if needed.
+7. Confirm tools are visible:
+- `list_goals`
+- `add_goal_record`
+- `add_goal_records_batch`
 
-1. Call `list_goals` with `{ "apiKey": "day4_ck_..." }`.
-2. Call `add_goal_record` with `apiKey` included in input.
-3. For bulk insert, call `add_goal_records_batch` with `{ apiKey, records: [...] }`.
+## Setup reference image
 
-For ChatGPT remote MCP, use HTTPS domain URL (not plain HTTP IP) when required by platform policy.
+![ChatGPT MCP setup flow](../apps/web/src/assets/mcp-chatgpt-setup.svg)
 
+## API key issue
+
+Issue your user API key (`day4_ck_...`) in Day4 app:
+
+- Profile -> Settings -> Chatbot API Key
+
+Then use that key in MCP tool inputs.
+
+## First test calls in ChatGPT
+
+1. `list_goals` with:
+
+```json
+{ "apiKey": "day4_ck_xxx" }
+```
+
+2. `add_goal_record` with:
+
+```json
+{
+  "apiKey": "day4_ck_xxx",
+  "goalId": 12,
+  "date": "2026-02-20",
+  "level": 72.5,
+  "message": "today progress"
+}
+```
+
+3. `add_goal_records_batch` with:
+
+```json
+{
+  "apiKey": "day4_ck_xxx",
+  "records": [
+    {
+      "goalId": 12,
+      "date": "2026-02-20",
+      "level": 72.5,
+      "message": "today progress"
+    },
+    {
+      "goalId": 12,
+      "date": "2026-02-21",
+      "level": 73,
+      "message": "next day"
+    }
+  ]
+}
+```
+
+For remote ChatGPT MCP, keep URL as HTTPS domain (not HTTP IP).

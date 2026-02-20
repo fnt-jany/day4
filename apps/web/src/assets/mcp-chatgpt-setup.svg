@@ -1,0 +1,28 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" fill="none">
+  <rect width="1200" height="680" rx="24" fill="#F8FBFF"/>
+  <text x="60" y="78" fill="#102A56" font-family="Arial, sans-serif" font-size="36" font-weight="700">ChatGPT Web MCP Setup (Day4)</text>
+  <text x="60" y="118" fill="#2A4A82" font-family="Arial, sans-serif" font-size="22">Profile -> Settings -> Apps -> Advanced settings -> Developer mode -> Build app</text>
+
+  <rect x="60" y="170" width="340" height="110" rx="14" fill="#FFFFFF" stroke="#CFE0FF"/>
+  <text x="84" y="215" fill="#163A70" font-family="Arial, sans-serif" font-size="24" font-weight="700">1) Open Profile</text>
+  <text x="84" y="248" fill="#40639E" font-family="Arial, sans-serif" font-size="18">Top-right profile menu</text>
+
+  <rect x="430" y="170" width="340" height="110" rx="14" fill="#FFFFFF" stroke="#CFE0FF"/>
+  <text x="454" y="215" fill="#163A70" font-family="Arial, sans-serif" font-size="24" font-weight="700">2) Build App</text>
+  <text x="454" y="248" fill="#40639E" font-family="Arial, sans-serif" font-size="18">Settings -> Apps -> Advanced</text>
+
+  <rect x="800" y="170" width="340" height="110" rx="14" fill="#FFFFFF" stroke="#CFE0FF"/>
+  <text x="824" y="215" fill="#163A70" font-family="Arial, sans-serif" font-size="24" font-weight="700">3) Add MCP</text>
+  <text x="824" y="248" fill="#40639E" font-family="Arial, sans-serif" font-size="18">Developer mode -> MCP URL</text>
+
+  <path d="M400 225H425" stroke="#7BA2E8" stroke-width="4"/>
+  <path d="M770 225H795" stroke="#7BA2E8" stroke-width="4"/>
+
+  <rect x="60" y="320" width="1080" height="140" rx="16" fill="#FFFFFF" stroke="#D8E6FF"/>
+  <text x="90" y="375" fill="#14376B" font-family="Consolas, monospace" font-size="26" font-weight="700">MCP URL</text>
+  <text x="90" y="420" fill="#1650B8" font-family="Consolas, monospace" font-size="30">https://day4-mcp.onrender.com/mcp</text>
+
+  <rect x="60" y="490" width="1080" height="130" rx="16" fill="#FFFFFF" stroke="#D8E6FF"/>
+  <text x="90" y="542" fill="#14376B" font-family="Arial, sans-serif" font-size="24" font-weight="700">Authentication</text>
+  <text x="90" y="585" fill="#1E4B94" font-family="Arial, sans-serif" font-size="28">Unrestricted (None) / 제한없음 (None)</text>
+</svg>

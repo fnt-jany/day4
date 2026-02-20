@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import MainApp from './MainApp'
+import mcpSetupImage from './assets/mcp-chatgpt-setup.svg'
 
 type AuthUser = {
   id: number
@@ -200,8 +201,16 @@ function McpGuidePage() {
       copyFailed: '복사에 실패했습니다. 수동으로 복사해 주세요.',
       sectionFlow: '연동 순서',
       step1: '1) ChatGPT에 MCP 서버 URL 등록',
-      step2: '2) list_goals 호출 시 apiKey(day4_ck_...) 포함',
-      step3: '3) add_goal_record 호출 시 apiKey와 목표/상태 값 포함',
+      step2: '2) API 키(day4_ck_...)는 프로필 > 설정 > 챗봇 API 키에서 발급합니다.',
+      step2b: '3) list_goals 호출 시 발급한 apiKey를 포함합니다.',
+      step3: '4) add_goal_record/add_goal_records_batch 호출 시 apiKey와 목표/상태 값을 포함합니다.',
+      sectionChatgpt: 'ChatGPT 웹 설정 (개발자 모드)',
+      chatgptStep1: '1) ChatGPT 웹에서 우상단 프로필을 누릅니다.',
+      chatgptStep2: '2) 설정 → 앱 → 고급 설정 → 개발자 모드 → 앱 만들기 메뉴로 이동합니다.',
+      chatgptStep3: '3) MCP URL에 https://day4-mcp.onrender.com/mcp 를 입력합니다.',
+      chatgptStep4: '4) 인증 방법은 제한없음(None)을 선택합니다.',
+      chatgptStep5: '5) 저장 후 list_goals, add_goal_record, add_goal_records_batch 도구가 보이는지 확인합니다.',
+      sectionImage: '설정 화면 안내 이미지',
       sectionTools: '도구 입력 예시',
     },
     en: {
@@ -215,8 +224,16 @@ function McpGuidePage() {
       copyFailed: 'Copy failed. Please copy manually.',
       sectionFlow: 'Flow',
       step1: '1) Register MCP server URL in ChatGPT',
-      step2: '2) Call list_goals with apiKey(day4_ck_...)',
-      step3: '3) Call add_goal_record with apiKey and record values',
+      step2: '2) Issue apiKey(day4_ck_...) in Profile > Settings > Chatbot API Key.',
+      step2b: '3) Call list_goals with issued apiKey.',
+      step3: '4) Call add_goal_record/add_goal_records_batch with apiKey and record values',
+      sectionChatgpt: 'ChatGPT Web Setup (Developer Mode)',
+      chatgptStep1: '1) In ChatGPT Web, click your profile menu (top-right).',
+      chatgptStep2: '2) Go to Settings -> Apps -> Advanced settings -> Developer mode -> Build app.',
+      chatgptStep3: '3) Set MCP URL: https://day4-mcp.onrender.com/mcp',
+      chatgptStep4: '4) Choose authentication method: Unrestricted (None).',
+      chatgptStep5: '5) Save and confirm list_goals, add_goal_record, add_goal_records_batch are visible.',
+      sectionImage: 'Setup Reference Image',
       sectionTools: 'Tool input examples',
     },
   }[language]
@@ -294,6 +311,22 @@ function McpGuidePage() {
           <li>{text.step2}</li>
           <li>{text.step3}</li>
         </ul>
+
+        <h3>{text.sectionChatgpt}</h3>
+        <ul className="guide-list">
+          <li>{text.chatgptStep1}</li>
+          <li>{text.chatgptStep2}</li>
+          <li>{text.chatgptStep3}</li>
+          <li>{text.chatgptStep4}</li>
+          <li>{text.chatgptStep5}</li>
+        </ul>
+
+        <h3>{text.sectionImage}</h3>
+        <img
+          src={mcpSetupImage}
+          alt={language === 'ko' ? 'ChatGPT 웹 MCP 설정 경로 안내 이미지' : 'ChatGPT web MCP setup flow image'}
+          className="guide-image"
+        />
 
         <h3>{text.sectionTools}</h3>
         <pre className="guide-code">{`list_goals
@@ -561,6 +594,11 @@ function App() {
 }
 
 export default App
+
+
+
+
+
 
 
 
