@@ -1,4 +1,4 @@
-# Day4 monorepo
+﻿# Day4 monorepo
 
 Web first (React + TypeScript + Vite), then mobile (React Native + TypeScript + Expo).
 
@@ -8,11 +8,13 @@ Web first (React + TypeScript + Vite), then mobile (React Native + TypeScript + 
 apps/
   web/          # React + TS + Vite
   api/          # Express + Supabase API
+  mcp/          # MCP bridge for ChatGPT/tools
   mobile/       # Expo app (to be initialized)
 packages/
   shared/       # shared types/utils/constants
 docs/
   chatbot-integration.md
+  mcp-chatgpt.md
 ```
 
 ## Run web app
@@ -61,6 +63,39 @@ External chatbot calls must go through your API server.
 - Status write: `POST /api/chatbot/records` (chatbot API key)
 
 See full manual: `docs/chatbot-integration.md`
+
+## Run MCP server
+
+1. Copy `apps/mcp/.env.example` to `apps/mcp/.env`
+2. Fill these values:
+
+```text
+DAY4_API_BASE=http://223.130.147.188:8787/api/chatbot
+DAY4_MCP_TIMEOUT_MS=10000
+MCP_HOST=0.0.0.0
+MCP_PORT=8788
+MCP_PATH=/mcp
+```
+
+3. Run stdio mode:
+
+```bash
+npm run start:mcp
+```
+
+4. Run HTTP mode (URL-based MCP clients):
+
+```bash
+npm run start:mcp:http
+```
+
+MCP Server URL example:
+
+```text
+http://223.130.147.188:8788/mcp
+```
+
+ChatGPT MCP setup guide: `docs/mcp-chatgpt.md`
 
 ## Web app API base
 

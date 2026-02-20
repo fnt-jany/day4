@@ -1,21 +1,23 @@
-{
-  "name": "day4-monorepo",
-  "private": true,
-  "version": "0.1.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:web": "npm --workspace apps/web run dev",
-    "dev:api": "npm --workspace apps/api run dev",
-    "build:web": "npm --workspace apps/web run build",
-    "lint:web": "npm --workspace apps/web run lint",
-    "preview:web": "npm --workspace apps/web run preview"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
-  }
+﻿{
+    "name":  "day4-monorepo",
+    "private":  true,
+    "version":  "0.1.0",
+    "workspaces":  [
+                       "apps/*",
+                       "packages/*"
+                   ],
+    "scripts":  {
+                    "dev":  "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+                    "dev:web":  "npm --workspace apps/web run dev",
+                    "dev:api":  "npm --workspace apps/api run dev",
+                    "build:web":  "npm --workspace apps/web run build",
+                    "lint:web":  "npm --workspace apps/web run lint",
+                    "preview:web":  "npm --workspace apps/web run preview",
+                    "start:mcp":  "npm --workspace apps/mcp run start",
+                    "start:mcp:http":  "npm --workspace apps/mcp run start:http"
+                },
+    "devDependencies":  {
+                            "concurrently":  "^9.2.1"
+                        }
 }
 
