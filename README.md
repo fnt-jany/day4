@@ -61,6 +61,7 @@ External chatbot calls must go through your API server.
 - API key revoke: `DELETE /api/chatbot/api-key` (user JWT)
 - Goal list: `GET /api/chatbot/goals` (chatbot API key)
 - Status write: `POST /api/chatbot/records` (chatbot API key)
+- Bulk status write: `POST /api/chatbot/records/batch` (chatbot API key)
 
 See full manual: `docs/chatbot-integration.md`
 
@@ -130,5 +131,6 @@ Then install workspace dependencies again:
 ```bash
 npm install
 ```
+
 
 

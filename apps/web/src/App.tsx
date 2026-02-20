@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import MainApp from './MainApp'
 
 type AuthUser = {
@@ -56,8 +56,15 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const AUTH_TOKEN_KEY = 'day4_auth_token'
 const CHATBOT_GUIDE_HASH = '#/chatbot-guide'
+const MCP_GUIDE_HASH = '#/mcp-guide'
 
-const isGuideHash = () => window.location.hash === CHATBOT_GUIDE_HASH
+type GuideRoute = 'none' | 'chatbot' | 'mcp'
+
+const getGuideRoute = (): GuideRoute => {
+  if (window.location.hash === CHATBOT_GUIDE_HASH) return 'chatbot'
+  if (window.location.hash === MCP_GUIDE_HASH) return 'mcp'
+  return 'none'
+}
 
 async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {})
@@ -177,13 +184,166 @@ function ChatbotGuidePage() {
   )
 }
 
+function McpGuidePage() {
+  const [language, setLanguage] = useState<'ko' | 'en'>('ko')
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'ok' | 'fail'>('idle')
+
+  const text = {
+    ko: {
+      appTitle: '작심사일',
+      pageTitle: 'MCP 연동 가이드',
+      summary: 'ChatGPT MCP에서 Day4 상태를 입력하는 방법입니다. 현재 방식은 매 호출마다 apiKey 전달이 필요합니다.',
+      home: '로그인 화면으로',
+      sectionUrl: 'MCP Server URL',
+      copyUrl: 'URL 복사',
+      copied: '복사되었습니다.',
+      copyFailed: '복사에 실패했습니다. 수동으로 복사해 주세요.',
+      sectionFlow: '연동 순서',
+      step1: '1) ChatGPT에 MCP 서버 URL 등록',
+      step2: '2) list_goals 호출 시 apiKey(day4_ck_...) 포함',
+      step3: '3) add_goal_record 호출 시 apiKey와 목표/상태 값 포함',
+      sectionTools: '도구 입력 예시',
+    },
+    en: {
+      appTitle: 'Day4',
+      pageTitle: 'MCP Integration Guide',
+      summary: 'How to write Day4 status updates via ChatGPT MCP. Current mode requires apiKey on every tool call.',
+      home: 'Back to login',
+      sectionUrl: 'MCP Server URL',
+      copyUrl: 'Copy URL',
+      copied: 'Copied.',
+      copyFailed: 'Copy failed. Please copy manually.',
+      sectionFlow: 'Flow',
+      step1: '1) Register MCP server URL in ChatGPT',
+      step2: '2) Call list_goals with apiKey(day4_ck_...)',
+      step3: '3) Call add_goal_record with apiKey and record values',
+      sectionTools: 'Tool input examples',
+    },
+  }[language]
+
+  const mcpUrl = 'https://day4-mcp.onrender.com/mcp'
+
+  const handleCopy = async () => {
+    const fallbackCopy = (value: string) => {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      const copied = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      if (!copied) {
+        throw new Error('copy failed')
+      }
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(mcpUrl)
+      } else {
+        fallbackCopy(mcpUrl)
+      }
+      setCopyStatus('ok')
+      window.setTimeout(() => setCopyStatus('idle'), 2000)
+    } catch {
+      try {
+        fallbackCopy(mcpUrl)
+        setCopyStatus('ok')
+        window.setTimeout(() => setCopyStatus('idle'), 2000)
+      } catch {
+        setCopyStatus('fail')
+      }
+    }
+  }
+
+  return (
+    <main className="guide-page">
+      <section className="guide-card">
+        <h1>{text.appTitle}</h1>
+        <h2>{text.pageTitle}</h2>
+        <p>{text.summary}</p>
+
+        <div className="settings-row auth-lang-row">
+          <label className="settings-option">
+            <input type="radio" name="mcp-guide-language" checked={language === 'ko'} onChange={() => setLanguage('ko')} />
+            {'한국어'}
+          </label>
+          <label className="settings-option">
+            <input type="radio" name="mcp-guide-language" checked={language === 'en'} onChange={() => setLanguage('en')} />
+            English
+          </label>
+        </div>
+
+        <h3>{text.sectionUrl}</h3>
+        <div className="guide-code-block">
+          <div className="guide-code-head">
+            <button type="button" className="guide-copy-button" onClick={() => void handleCopy()}>
+              {text.copyUrl}
+            </button>
+          </div>
+          <pre className="guide-code">{mcpUrl}</pre>
+        </div>
+        {copyStatus === 'ok' ? <p className="empty">{text.copied}</p> : null}
+        {copyStatus === 'fail' ? <p className="error-text">{text.copyFailed}</p> : null}
+
+        <h3>{text.sectionFlow}</h3>
+        <ul className="guide-list">
+          <li>{text.step1}</li>
+          <li>{text.step2}</li>
+          <li>{text.step3}</li>
+        </ul>
+
+        <h3>{text.sectionTools}</h3>
+        <pre className="guide-code">{`list_goals
+{
+  "apiKey": "day4_ck_xxx"
+}
+
+add_goal_record
+{
+  "apiKey": "day4_ck_xxx",
+  "goalId": 12,
+  "date": "2026-02-20",
+  "level": 72.5,
+  "message": "today progress"
+}
+
+add_goal_records_batch
+{
+  "apiKey": "day4_ck_xxx",
+  "records": [
+    {
+      "goalId": 12,
+      "date": "2026-02-20",
+      "level": 72.5,
+      "message": "today progress"
+    },
+    {
+      "goalId": 12,
+      "date": "2026-02-21",
+      "level": 73.0,
+      "message": "next day"
+    }
+  ]
+}`}</pre>
+
+        <p>
+          <a href="#/">{text.home}</a>
+        </p>
+      </section>
+    </main>
+  )
+}
+
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const [loginLanguage, setLoginLanguage] = useState<'ko' | 'en'>('ko')
-  const [guideRoute, setGuideRoute] = useState(isGuideHash())
+  const [guideRoute, setGuideRoute] = useState<GuideRoute>(getGuideRoute())
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
 
   const text = {
@@ -197,6 +357,7 @@ function App() {
       guestLogin: '\uAC8C\uC2A4\uD2B8\uB85C \uB85C\uADF8\uC778',
       guestLoginFailed: '\uAC8C\uC2A4\uD2B8 \uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
       chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+      mcpGuide: 'MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
       loading: '\uBD88\uB7EC\uC624\uB294 \uC911...',
     },
     en: {
@@ -209,6 +370,7 @@ function App() {
       guestLogin: 'Continue as Guest',
       guestLoginFailed: 'Guest login failed.',
       chatbotGuide: 'Chatbot Integration Guide',
+      mcpGuide: 'MCP Integration Guide',
       loading: 'Loading...',
     },
   }[loginLanguage]
@@ -258,16 +420,22 @@ function App() {
   }, [text.guestLoginFailed])
 
   useEffect(() => {
-    const onHashChange = () => setGuideRoute(isGuideHash())
+    const onHashChange = () => setGuideRoute(getGuideRoute())
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
   useEffect(() => {
-    if (guideRoute) {
-      document.title = loginLanguage === 'ko'
-        ? '\uC791\uC2EC\uC0AC\uC77C - \uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC'
-        : 'Day4 - Chatbot Integration Guide'
+    if (guideRoute !== 'none') {
+      if (guideRoute === 'chatbot') {
+        document.title = loginLanguage === 'ko'
+          ? '\uC791\uC2EC\uC0AC\uC77C - \uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC'
+          : 'Day4 - Chatbot Integration Guide'
+      } else {
+        document.title = loginLanguage === 'ko'
+          ? '\uC791\uC2EC\uC0AC\uC77C - MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC'
+          : 'Day4 - MCP Integration Guide'
+      }
       return
     }
 
@@ -331,8 +499,12 @@ function App() {
     setUser(null)
   }, [])
 
-  if (guideRoute) {
+  if (guideRoute === 'chatbot') {
     return <ChatbotGuidePage />
+  }
+
+  if (guideRoute === 'mcp') {
+    return <McpGuidePage />
   }
 
   if (isLoading) {
@@ -373,6 +545,8 @@ function App() {
           </button>
           <p className="guide-link-wrap">
             <a href={CHATBOT_GUIDE_HASH}>{text.chatbotGuide}</a>
+            {' | '}
+            <a href={MCP_GUIDE_HASH}>{text.mcpGuide}</a>
           </p>
           {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
         </section>
@@ -387,3 +561,7 @@ function App() {
 }
 
 export default App
+
+
+
+

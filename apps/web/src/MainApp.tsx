@@ -87,6 +87,7 @@ const TEXT = {
     appTitle: '작심사일',
     settings: '설정',
     chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+    mcpGuide: 'MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
     addGoal: '목표 추가',
     chartSpacingLabel: '그래프 X축 간격',
     equalSpacing: '등간격',
@@ -180,6 +181,7 @@ const TEXT = {
     chatbotApiKeyCopied: 'API key copied to clipboard.',
     settings: 'Settings',
     chatbotGuide: 'Chatbot Guide',
+    mcpGuide: 'MCP Guide',
     addGoal: 'Add Goal',
     chartSpacingLabel: 'Chart X-Axis Spacing',
     equalSpacing: 'Equal Spacing',
@@ -953,6 +955,15 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                 <button
                   type="button"
                   onClick={() => {
+                    setProfileMenuOpen(false)
+                    window.open(`${window.location.origin}/#/mcp-guide`, '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  {text.mcpGuide}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setSettingsOpen((prev) => !prev)
                     setProfileMenuOpen(false)
                   }}
@@ -1271,6 +1282,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
 
 
 

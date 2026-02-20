@@ -1,4 +1,4 @@
-#root {
+﻿#root {
   margin: 0;
 }
 
@@ -440,6 +440,34 @@ button.primary {
   margin: 18px 0 8px;
 }
 
+.guide-code-block {
+  border: 1px solid #dbe2f1;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.guide-code-head {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+  border-bottom: 1px solid #eef2fb;
+  background: #f8fbff;
+}
+
+.guide-copy-button {
+  border: 1px solid #cfd8ec;
+  border-radius: 6px;
+  background: #fff;
+  color: #2b3a5f;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.guide-copy-button:hover {
+  background: #f1f5ff;
+}
 .guide-code {
   margin: 0;
   white-space: pre-wrap;
@@ -475,3 +503,4 @@ button.primary {
 .chatbot-key-panel p {
   margin: 6px 0;
 }
+

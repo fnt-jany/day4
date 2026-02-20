@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import jwt from 'jsonwebtoken'
@@ -570,58 +570,128 @@ app.get('/api/chatbot/goals', requireChatbotAuth, async (req, res) => {
   }
 })
 
-app.post('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
-  const goalId = Number(req.body?.goalId)
-  const goalName = req.body?.goalName
-  const date = req.body?.date
-  const level = req.body?.level
-  const message = req.body?.message
+const parseChatbotRecordPayload = (payload) => {
+  const goalId = Number(payload?.goalId)
+  const goalName = payload?.goalName
+  const date = payload?.date
+  const level = payload?.level
+  const message = payload?.message
 
   if ((!goalId && !goalName) || !date || Number.isNaN(Number(level))) {
-    res.status(400).json({ message: 'invalid payload' })
+    return { ok: false, status: 400, message: 'invalid payload' }
+  }
+
+  return {
+    ok: true,
+    value: {
+      goalId: goalId || null,
+      goalName,
+      date,
+      level: Number(level),
+      message: String(message ?? '').trim() || null,
+    },
+  }
+}
+
+const createChatbotRecordForUser = async (userId, payload) => {
+  const parsed = parseChatbotRecordPayload(payload)
+  if (!parsed.ok) {
+    return parsed
+  }
+
+  const { goalId, goalName, date, level, message } = parsed.value
+
+  let goal = null
+  if (goalId) {
+    goal = await ensureOwnedGoal(goalId, userId)
+    if (!goal) {
+      return { ok: false, status: 404, message: 'goal not found' }
+    }
+  } else {
+    const byName = await findGoalByName(goalName, userId)
+    if (!byName) {
+      return { ok: false, status: 404, message: 'goal not found' }
+    }
+    if (byName.ambiguous) {
+      return { ok: false, status: 409, message: 'goal name is ambiguous. use goalId.' }
+    }
+    goal = byName
+  }
+
+  const data = await insertWithNextId('goal_records', {
+    goal_id: goal.id,
+    date,
+    level,
+    message,
+  })
+
+  return {
+    ok: true,
+    goalId: goal.id,
+    goalName: goal.name,
+    recordId: data.id,
+  }
+}
+
+app.post('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
+  try {
+    const result = await createChatbotRecordForUser(req.userId, req.body)
+
+    if (!result.ok) {
+      res.status(result.status).json({ message: result.message })
+      return
+    }
+
+    res.status(201).json(result)
+  } catch (error) {
+    console.error('chatbot record create failed', error)
+    res.status(500).json({ message: 'failed to create chatbot record' })
+  }
+})
+
+app.post('/api/chatbot/records/batch', requireChatbotAuth, async (req, res) => {
+  const records = req.body?.records
+  const maxBatchSize = 50
+
+  if (!Array.isArray(records) || records.length === 0 || records.length > maxBatchSize) {
+    res.status(400).json({ message: `records must be an array of 1..${maxBatchSize}` })
     return
   }
 
   try {
-    let goal = null
+    const success = []
+    const failed = []
 
-    if (goalId) {
-      goal = await ensureOwnedGoal(goalId, req.userId)
-      if (!goal) {
-        res.status(404).json({ message: 'goal not found' })
-        return
+    for (let index = 0; index < records.length; index += 1) {
+      const payload = records[index]
+      try {
+        const result = await createChatbotRecordForUser(req.userId, payload)
+        if (!result.ok) {
+          failed.push({ index, status: result.status, message: result.message })
+          continue
+        }
+        success.push({
+          index,
+          goalId: result.goalId,
+          goalName: result.goalName,
+          recordId: result.recordId,
+        })
+      } catch (error) {
+        failed.push({ index, status: 500, message: String(error?.message || error) })
       }
-    } else {
-      const byName = await findGoalByName(goalName, req.userId)
-      if (!byName) {
-        res.status(404).json({ message: 'goal not found' })
-        return
-      }
-      if (byName.ambiguous) {
-        res.status(409).json({ message: 'goal name is ambiguous. use goalId.' })
-        return
-      }
-      goal = byName
     }
 
-    const normalizedMessage = String(message ?? '').trim() || null
-
-    const data = await insertWithNextId('goal_records', {
-      goal_id: goal.id,
-      date,
-      level: Number(level),
-      message: normalizedMessage,
-    })
-
-    res.status(201).json({
-      ok: true,
-      goalId: goal.id,
-      goalName: goal.name,
-      recordId: data.id,
+    res.status(200).json({
+      ok: failed.length === 0,
+      total: records.length,
+      inserted: success.length,
+      failedCount: failed.length,
+      success,
+      failed,
     })
   } catch (error) {
-    console.error('chatbot record create failed', error)
-    res.status(500).json({ message: 'failed to create chatbot record' })
+    console.error('chatbot batch record create failed', error)
+    res.status(500).json({ message: 'failed to create chatbot records batch' })
   }
 })
 
@@ -919,3 +989,4 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
 app.listen(port, '0.0.0.0', () => {
   console.log(`API server listening on http://0.0.0.0:${port}`)
 })
+

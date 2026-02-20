@@ -57,7 +57,7 @@ function toTextResult(payload) {
 export function createDay4McpServer() {
   const server = new McpServer({
     name: 'day4-mcp',
-    version: '0.4.0',
+    version: '0.5.0',
   })
 
   server.tool(
@@ -113,5 +113,41 @@ export function createDay4McpServer() {
     },
   )
 
+  server.tool(
+    'add_goal_records_batch',
+    'Add multiple status records in one call. apiKey(day4_ck_...) is required.',
+    {
+      apiKey: z.string().min(12),
+      records: z.array(
+        z.object({
+          goalId: z.number().int().positive().optional(),
+          goalName: z.string().trim().min(1).optional(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format.'),
+          level: z.number(),
+          message: z.string().trim().max(500).optional(),
+        }).refine((value) => Boolean(value.goalId || value.goalName), {
+          message: 'Either goalId or goalName is required.',
+        }),
+      ).min(1).max(50),
+    },
+    async ({ apiKey, records }) => {
+      try {
+        if (!validateChatbotApiKey(apiKey)) {
+          return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
+        }
+
+        const result = await requestDay4('/records/batch', apiKey, {
+          method: 'POST',
+          body: JSON.stringify({ records }),
+        })
+
+        return toTextResult(result)
+      } catch (error) {
+        return toTextResult({ ok: false, error: String(error?.message || error) })
+      }
+    },
+  )
   return server
 }
+
+

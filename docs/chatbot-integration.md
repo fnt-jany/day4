@@ -1,4 +1,4 @@
-# Chatbot Integration Manual
+﻿# Chatbot Integration Manual
 
 This manual describes how an external chatbot can write Day4 goal status records through your API server.
 
@@ -64,6 +64,63 @@ Response:
 }
 ```
 
+
+## 4) Create multiple status records in one request (batch)
+
+Request:
+
+```http
+POST /api/chatbot/records/batch
+Authorization: Bearer <chatbot_api_key>
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "records": [
+    {
+      "goalId": 12,
+      "date": "2026-02-20",
+      "level": 42.5,
+      "message": "today progress"
+    },
+    {
+      "goalId": 12,
+      "date": "2026-02-21",
+      "level": 44.0,
+      "message": "next day"
+    }
+  ]
+}
+```
+
+Response (partial success possible):
+
+```json
+{
+  "ok": false,
+  "total": 2,
+  "inserted": 1,
+  "failedCount": 1,
+  "success": [
+    {
+      "index": 0,
+      "goalId": 12,
+      "goalName": "Running",
+      "recordId": 101
+    }
+  ],
+  "failed": [
+    {
+      "index": 1,
+      "status": 404,
+      "message": "goal not found"
+    }
+  ]
+}
+```
 ## Error meanings
 
 - `401 chatbot unauthorized`: key missing/invalid/revoked
@@ -84,3 +141,4 @@ Response:
 - Keep `chatbot_api_key` secret.
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` to chatbot or browser.
 - Revoke and re-issue key if leaked.
+

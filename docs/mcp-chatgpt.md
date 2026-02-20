@@ -8,6 +8,7 @@ The server is stateless for user auth: each tool call must include `apiKey` (`da
 
 - `list_goals`: list goals for the provided `apiKey`
 - `add_goal_record`: add a status record for the provided `apiKey`
+- `add_goal_records_batch`: add multiple records in one request for the provided `apiKey`
 
 ## Environment
 
@@ -53,5 +54,7 @@ http://localhost:8788/mcp
 
 1. Call `list_goals` with `{ "apiKey": "day4_ck_..." }`.
 2. Call `add_goal_record` with `apiKey` included in input.
+3. For bulk insert, call `add_goal_records_batch` with `{ apiKey, records: [...] }`.
 
 For ChatGPT remote MCP, use HTTPS domain URL (not plain HTTP IP) when required by platform policy.
+
