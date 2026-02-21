@@ -162,8 +162,10 @@ const TEXT = {
       loadSettings: '설정 값을 불러오지 못했습니다.',
       saveSettings: '설정 저장에 실패했습니다.',
       saveGoal: '목표 저장에 실패했습니다.',
+      goalLimit: '\uBAA9\uD45C\uB294 \uCD5C\uB300 10\uAC1C\uAE4C\uC9C0 \uB9CC\uB4E4 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
       deleteGoal: '목표 삭제에 실패했습니다.',
       saveRecord: '기록 저장에 실패했습니다.',
+      recordLimit: '\uAE30\uB85D\uC740 \uBAA9\uD45C\uB2F9 \uCD5C\uB300 100\uAC1C\uAE4C\uC9C0 \uC800\uC7A5\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
       deleteRecord: '기록 삭제에 실패했습니다.',
     },
   },
@@ -252,8 +254,10 @@ const TEXT = {
       loadSettings: 'Failed to load settings.',
       saveSettings: 'Failed to save settings.',
       saveGoal: 'Failed to save goal.',
+      goalLimit: 'You can create up to 10 goals.',
       deleteGoal: 'Failed to delete goal.',
       saveRecord: 'Failed to save record.',
+      recordLimit: 'You can store up to 100 records per goal.',
       deleteRecord: 'Failed to delete record.',
     },
   },
@@ -278,6 +282,14 @@ type GoalTrendAssessment = {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+const GOAL_LIMIT_API_MESSAGE = 'goal limit reached (10)'
+const RECORD_LIMIT_API_MESSAGE = 'record limit reached (100)'
+
+type ApiRequestError = Error & {
+  status: number
+  apiMessage: string | null
+}
 
 const getGoalTrendAssessment = (goal: Goal): GoalTrendAssessment => {
   const sorted = getRecordsByDateAsc(goal.inputs)
@@ -418,16 +430,29 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+    headers.set('Authorization', 'Bearer ' + token)
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(API_BASE + path, {
     ...init,
     headers,
   })
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`)
+    let apiMessage: string | null = null
+    try {
+      const payload = (await response.json()) as { message?: unknown }
+      if (typeof payload?.message === 'string') {
+        apiMessage = payload.message
+      }
+    } catch {
+      apiMessage = null
+    }
+
+    const error = new Error(apiMessage ?? 'API error: ' + response.status) as ApiRequestError
+    error.status = response.status
+    error.apiMessage = apiMessage
+    throw error
   }
 
   if (response.status === 204) {
@@ -993,7 +1018,12 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
       closeGoalForm()
       await loadGoals()
-    } catch {
+    } catch (error) {
+      const apiError = error as Partial<ApiRequestError>
+      if (apiError.status === 409 && apiError.apiMessage === GOAL_LIMIT_API_MESSAGE) {
+        setErrorMessage(text.errors.goalLimit)
+        return
+      }
       setErrorMessage(text.errors.saveGoal)
     }
   }
@@ -1089,7 +1119,12 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
       closeInputForm()
       await loadGoals()
-    } catch {
+    } catch (error) {
+      const apiError = error as Partial<ApiRequestError>
+      if (apiError.status === 409 && apiError.apiMessage === RECORD_LIMIT_API_MESSAGE) {
+        setErrorMessage(text.errors.recordLimit)
+        return
+      }
       setErrorMessage(text.errors.saveRecord)
     }
   }

@@ -1,4 +1,4 @@
-﻿import 'dotenv/config'
+import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import jwt from 'jsonwebtoken'
@@ -13,6 +13,8 @@ const jwtSecret = process.env.JWT_SECRET || 'change-this-dev-secret'
 const supabaseUrl = process.env.SUPABASE_URL || ''
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const googleClient = new OAuth2Client(googleClientId)
+const MAX_GOALS_PER_USER = 10
+const MAX_RECORDS_PER_GOAL = 100
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
   throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
@@ -384,6 +386,22 @@ const ensureOwnedGoal = async (goalId, userId) => {
   return data
 }
 
+const getGoalCountForUser = async (userId) => {
+  const { data, error } = await supabase.from('goals').select('id').eq('user_id', userId)
+  if (error) {
+    throw error
+  }
+  return (data || []).length
+}
+
+const getRecordCountForGoal = async (goalId) => {
+  const { data, error } = await supabase.from('goal_records').select('id').eq('goal_id', goalId)
+  if (error) {
+    throw error
+  }
+  return (data || []).length
+}
+
 const findGoalByName = async (goalName, userId) => {
   const normalized = String(goalName || '').trim()
   if (!normalized) {
@@ -618,6 +636,11 @@ const createChatbotRecordForUser = async (userId, payload) => {
     goal = byName
   }
 
+  const recordCount = await getRecordCountForGoal(goal.id)
+  if (recordCount >= MAX_RECORDS_PER_GOAL) {
+    return { ok: false, status: 409, message: `record limit reached (${MAX_RECORDS_PER_GOAL})` }
+  }
+
   const data = await insertWithNextId('goal_records', {
     goal_id: goal.id,
     date,
@@ -778,6 +801,12 @@ app.post('/api/goals', requireAuth, async (req, res) => {
   }
 
   try {
+    const goalCount = await getGoalCountForUser(req.userId)
+    if (goalCount >= MAX_GOALS_PER_USER) {
+      res.status(409).json({ message: `goal limit reached (${MAX_GOALS_PER_USER})` })
+      return
+    }
+
     const data = await insertWithNextId('goals', {
       name: String(name).trim(),
       target_date: targetDate,
@@ -887,6 +916,12 @@ app.post('/api/goals/:goalId/records', requireAuth, async (req, res) => {
       return
     }
 
+    const recordCount = await getRecordCountForGoal(goalId)
+    if (recordCount >= MAX_RECORDS_PER_GOAL) {
+      res.status(409).json({ message: `record limit reached (${MAX_RECORDS_PER_GOAL})` })
+      return
+    }
+
     const normalizedMessage = String(message ?? '').trim() || null
 
     const data = await insertWithNextId('goal_records', {
@@ -989,4 +1024,5 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
 app.listen(port, '0.0.0.0', () => {
   console.log(`API server listening on http://0.0.0.0:${port}`)
 })
+
 
