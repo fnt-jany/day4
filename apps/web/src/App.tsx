@@ -203,13 +203,13 @@ function McpGuidePage() {
       step1: '1) ChatGPT에 MCP 서버 URL 등록',
       step2: '2) API 키(day4_ck_...)는 프로필 > 설정 > 챗봇 API 키에서 발급합니다.',
       step2b: '3) list_goals 호출 시 발급한 apiKey를 포함합니다.',
-      step3: '4) add_goal_record/add_goal_records_batch 호출 시 apiKey와 목표/상태 값을 포함합니다.',
+      step3: '4) list_goal_records / add_goal_record / update_goal_record / delete_goal_record / add_goal_records_batch 호출 시 apiKey와 목표/상태 값을 포함합니다.',
       sectionChatgpt: 'ChatGPT 웹 설정 (개발자 모드)',
       chatgptStep1: '1) ChatGPT 웹에서 우상단 프로필을 누릅니다.',
       chatgptStep2: '2) 설정 → 앱 → 고급 설정 → 개발자 모드 → 앱 만들기 메뉴로 이동합니다.',
       chatgptStep3: '3) MCP URL에 https://day4-mcp.onrender.com/mcp 를 입력합니다.',
       chatgptStep4: '4) 인증 방법은 제한없음(None)을 선택합니다.',
-      chatgptStep5: '5) 저장 후 list_goals, add_goal_record, add_goal_records_batch 도구가 보이는지 확인합니다.',
+      chatgptStep5: '5) 저장 후 list_goals, list_goal_records, add_goal_record, update_goal_record, delete_goal_record, add_goal_records_batch 도구가 보이는지 확인합니다.',
       sectionImage: '설정 화면 안내 이미지',
       sectionTools: '도구 입력 예시',
     },
@@ -226,13 +226,13 @@ function McpGuidePage() {
       step1: '1) Register MCP server URL in ChatGPT',
       step2: '2) Issue apiKey(day4_ck_...) in Profile > Settings > Chatbot API Key.',
       step2b: '3) Call list_goals with issued apiKey.',
-      step3: '4) Call add_goal_record/add_goal_records_batch with apiKey and record values',
+      step3: '4) Call list_goal_records/add_goal_record/update_goal_record/delete_goal_record/add_goal_records_batch with apiKey',
       sectionChatgpt: 'ChatGPT Web Setup (Developer Mode)',
       chatgptStep1: '1) In ChatGPT Web, click your profile menu (top-right).',
       chatgptStep2: '2) Go to Settings -> Apps -> Advanced settings -> Developer mode -> Build app.',
       chatgptStep3: '3) Set MCP URL: https://day4-mcp.onrender.com/mcp',
       chatgptStep4: '4) Choose authentication method: Unrestricted (None).',
-      chatgptStep5: '5) Save and confirm list_goals, add_goal_record, add_goal_records_batch are visible.',
+      chatgptStep5: '5) Save and confirm list_goals, list_goal_records, add_goal_record, update_goal_record, delete_goal_record, add_goal_records_batch are visible.',
       sectionImage: 'Setup Reference Image',
       sectionTools: 'Tool input examples',
     },
@@ -334,6 +334,13 @@ function McpGuidePage() {
   "apiKey": "day4_ck_xxx"
 }
 
+list_goal_records
+{
+  "apiKey": "day4_ck_xxx",
+  "goalId": 12,
+  "limit": 20
+}
+
 add_goal_record
 {
   "apiKey": "day4_ck_xxx",
@@ -341,6 +348,21 @@ add_goal_record
   "date": "2026-02-20",
   "level": 72.5,
   "message": "today progress"
+}
+
+update_goal_record
+{
+  "apiKey": "day4_ck_xxx",
+  "recordId": 345,
+  "date": "2026-02-21",
+  "level": 73.0,
+  "message": "edited"
+}
+
+delete_goal_record
+{
+  "apiKey": "day4_ck_xxx",
+  "recordId": 345
 }
 
 add_goal_records_batch

@@ -7,7 +7,10 @@ The server is stateless for user auth: each tool call must include `apiKey` (`da
 ## Tools
 
 - `list_goals`: list goals for the provided `apiKey`
+- `list_goal_records`: list records for one goal (`goalId` or `goalName`)
 - `add_goal_record`: add a status record for the provided `apiKey`
+- `update_goal_record`: update one record by `recordId`
+- `delete_goal_record`: delete one record by `recordId`
 - `add_goal_records_batch`: add multiple records in one request for the provided `apiKey`
 
 ## Environment
@@ -57,7 +60,10 @@ https://day4-mcp.onrender.com/mcp
 6. Save and reconnect if needed.
 7. Confirm tools are visible:
 - `list_goals`
+- `list_goal_records`
 - `add_goal_record`
+- `update_goal_record`
+- `delete_goal_record`
 - `add_goal_records_batch`
 
 ## Setup reference image
@@ -92,7 +98,38 @@ Then use that key in MCP tool inputs.
 }
 ```
 
-3. `add_goal_records_batch` with:
+3. `list_goal_records` with:
+
+```json
+{
+  "apiKey": "day4_ck_xxx",
+  "goalId": 12,
+  "limit": 20
+}
+```
+
+4. `update_goal_record` with:
+
+```json
+{
+  "apiKey": "day4_ck_xxx",
+  "recordId": 345,
+  "date": "2026-02-21",
+  "level": 73.1,
+  "message": "edited"
+}
+```
+
+5. `delete_goal_record` with:
+
+```json
+{
+  "apiKey": "day4_ck_xxx",
+  "recordId": 345
+}
+```
+
+6. `add_goal_records_batch` with:
 
 ```json
 {

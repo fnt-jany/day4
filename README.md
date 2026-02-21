@@ -100,6 +100,8 @@ ChatGPT MCP setup guide: `docs/mcp-chatgpt.md`
 
 MCP tools are stateless. Pass `apiKey` in each tool call.
 
+Current tools: `list_goals`, `list_goal_records`, `add_goal_record`, `update_goal_record`, `delete_goal_record`, `add_goal_records_batch`.
+
 ## Web app API base
 
 Web app default API base is:

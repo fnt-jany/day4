@@ -1,4 +1,4 @@
-﻿import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 const rawBase = process.env.DAY4_API_BASE || ''
@@ -30,7 +30,12 @@ async function requestDay4(path, apiKey, init = {}) {
     })
 
     const text = await response.text()
-    const data = text ? JSON.parse(text) : null
+    let data = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = { message: text || null }
+    }
 
     if (!response.ok) {
       const errorMessage = data?.message || `HTTP ${response.status}`
@@ -54,10 +59,17 @@ function toTextResult(payload) {
   }
 }
 
+function validateApiKeyOrReturn(apiKey) {
+  if (!validateChatbotApiKey(apiKey)) {
+    return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
+  }
+  return null
+}
+
 export function createDay4McpServer() {
   const server = new McpServer({
     name: 'day4-mcp',
-    version: '0.5.0',
+    version: '0.6.0',
   })
 
   server.tool(
@@ -67,13 +79,47 @@ export function createDay4McpServer() {
       apiKey: z.string().min(12),
     },
     async ({ apiKey }) => {
-      try {
-        if (!validateChatbotApiKey(apiKey)) {
-          return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
-        }
+      const invalid = validateApiKeyOrReturn(apiKey)
+      if (invalid) {
+        return invalid
+      }
 
+      try {
         const goals = await requestDay4('/goals', apiKey, { method: 'GET' })
         return toTextResult({ ok: true, count: Array.isArray(goals) ? goals.length : 0, goals })
+      } catch (error) {
+        return toTextResult({ ok: false, error: String(error?.message || error) })
+      }
+    },
+  )
+
+  server.tool(
+    'list_goal_records',
+    'List records for a goal. apiKey(day4_ck_...) and goalId or goalName are required.',
+    {
+      apiKey: z.string().min(12),
+      goalId: z.number().int().positive().optional(),
+      goalName: z.string().trim().min(1).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    async ({ apiKey, goalId, goalName, limit }) => {
+      if (!goalId && !goalName) {
+        return toTextResult({ ok: false, error: 'Either goalId or goalName is required.' })
+      }
+
+      const invalid = validateApiKeyOrReturn(apiKey)
+      if (invalid) {
+        return invalid
+      }
+
+      try {
+        const query = new URLSearchParams()
+        if (goalId) query.set('goalId', String(goalId))
+        if (goalName) query.set('goalName', goalName)
+        if (limit) query.set('limit', String(limit))
+
+        const result = await requestDay4(`/records?${query.toString()}`, apiKey, { method: 'GET' })
+        return toTextResult(result)
       } catch (error) {
         return toTextResult({ ok: false, error: String(error?.message || error) })
       }
@@ -96,11 +142,12 @@ export function createDay4McpServer() {
         return toTextResult({ ok: false, error: 'Either goalId or goalName is required.' })
       }
 
-      try {
-        if (!validateChatbotApiKey(apiKey)) {
-          return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
-        }
+      const invalid = validateApiKeyOrReturn(apiKey)
+      if (invalid) {
+        return invalid
+      }
 
+      try {
         const created = await requestDay4('/records', apiKey, {
           method: 'POST',
           body: JSON.stringify({ goalId, goalName, date, level, message }),
@@ -114,28 +161,90 @@ export function createDay4McpServer() {
   )
 
   server.tool(
+    'update_goal_record',
+    'Update one record by recordId. apiKey(day4_ck_...) is required.',
+    {
+      apiKey: z.string().min(12),
+      recordId: z.number().int().positive(),
+      goalId: z.number().int().positive().optional(),
+      goalName: z.string().trim().min(1).optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format.'),
+      level: z.number(),
+      message: z.string().trim().max(500).optional(),
+    },
+    async ({ apiKey, recordId, goalId, goalName, date, level, message }) => {
+      const invalid = validateApiKeyOrReturn(apiKey)
+      if (invalid) {
+        return invalid
+      }
+
+      try {
+        const result = await requestDay4(`/records/${recordId}`, apiKey, {
+          method: 'PUT',
+          body: JSON.stringify({ goalId, goalName, date, level, message }),
+        })
+        return toTextResult(result)
+      } catch (error) {
+        return toTextResult({ ok: false, error: String(error?.message || error) })
+      }
+    },
+  )
+
+  server.tool(
+    'delete_goal_record',
+    'Delete one record by recordId. apiKey(day4_ck_...) is required.',
+    {
+      apiKey: z.string().min(12),
+      recordId: z.number().int().positive(),
+      goalId: z.number().int().positive().optional(),
+      goalName: z.string().trim().min(1).optional(),
+    },
+    async ({ apiKey, recordId, goalId, goalName }) => {
+      const invalid = validateApiKeyOrReturn(apiKey)
+      if (invalid) {
+        return invalid
+      }
+
+      try {
+        const result = await requestDay4(`/records/${recordId}`, apiKey, {
+          method: 'DELETE',
+          body: JSON.stringify({ goalId, goalName }),
+        })
+        return toTextResult(result)
+      } catch (error) {
+        return toTextResult({ ok: false, error: String(error?.message || error) })
+      }
+    },
+  )
+
+  server.tool(
     'add_goal_records_batch',
     'Add multiple status records in one call. apiKey(day4_ck_...) is required.',
     {
       apiKey: z.string().min(12),
       records: z.array(
-        z.object({
-          goalId: z.number().int().positive().optional(),
-          goalName: z.string().trim().min(1).optional(),
-          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format.'),
-          level: z.number(),
-          message: z.string().trim().max(500).optional(),
-        }).refine((value) => Boolean(value.goalId || value.goalName), {
-          message: 'Either goalId or goalName is required.',
-        }),
-      ).min(1).max(50),
+        z
+          .object({
+            goalId: z.number().int().positive().optional(),
+            goalName: z.string().trim().min(1).optional(),
+            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format.'),
+            level: z.number(),
+            message: z.string().trim().max(500).optional(),
+          })
+          .refine((value) => Boolean(value.goalId || value.goalName), {
+            message: 'Either goalId or goalName is required.',
+          }),
+      )
+        .min(1)
+        .max(50),
     },
     async ({ apiKey, records }) => {
-      try {
-        if (!validateChatbotApiKey(apiKey)) {
-          return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
-        }
+      const invalid = validateApiKeyOrReturn(apiKey)
+      if (invalid) {
+        return invalid
+      }
 
+      try {
         const result = await requestDay4('/records/batch', apiKey, {
           method: 'POST',
           body: JSON.stringify({ records }),
@@ -147,7 +256,6 @@ export function createDay4McpServer() {
       }
     },
   )
+
   return server
 }
-
-

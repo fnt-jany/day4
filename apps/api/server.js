@@ -656,6 +656,63 @@ const createChatbotRecordForUser = async (userId, payload) => {
   }
 }
 
+const resolveChatbotGoalForUser = async (userId, { goalId, goalName }) => {
+  const parsedGoalId = Number(goalId)
+  const normalizedGoalName = typeof goalName === 'string' ? goalName.trim() : ''
+
+  if (!parsedGoalId && !normalizedGoalName) {
+    return { ok: false, status: 400, message: 'goalId or goalName is required' }
+  }
+
+  if (parsedGoalId) {
+    const goal = await ensureOwnedGoal(parsedGoalId, userId)
+    if (!goal) {
+      return { ok: false, status: 404, message: 'goal not found' }
+    }
+    return { ok: true, goal }
+  }
+
+  const byName = await findGoalByName(normalizedGoalName, userId)
+  if (!byName) {
+    return { ok: false, status: 404, message: 'goal not found' }
+  }
+  if (byName.ambiguous) {
+    return { ok: false, status: 409, message: 'goal name is ambiguous. use goalId.' }
+  }
+
+  return { ok: true, goal: byName }
+}
+
+const getOwnedChatbotRecord = async (recordId, userId) => {
+  const { data, error } = await supabase
+    .from('goal_records')
+    .select('id, goal_id, date, level, message')
+    .eq('id', recordId)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  if (!data) {
+    return null
+  }
+
+  const ownedGoal = await ensureOwnedGoal(data.goal_id, userId)
+  if (!ownedGoal) {
+    return null
+  }
+
+  return {
+    id: data.id,
+    goalId: data.goal_id,
+    goalName: ownedGoal.name,
+    date: data.date,
+    level: data.level,
+    message: data.message ?? null,
+  }
+}
+
 app.post('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
   try {
     const result = await createChatbotRecordForUser(req.userId, req.body)
@@ -715,6 +772,168 @@ app.post('/api/chatbot/records/batch', requireChatbotAuth, async (req, res) => {
   } catch (error) {
     console.error('chatbot batch record create failed', error)
     res.status(500).json({ message: 'failed to create chatbot records batch' })
+  }
+})
+
+app.get('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
+  const goalId = req.query?.goalId
+  const goalName = req.query?.goalName
+  const requestedLimit = Number(req.query?.limit)
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 100
+
+  try {
+    const resolved = await resolveChatbotGoalForUser(req.userId, { goalId, goalName })
+    if (!resolved.ok) {
+      res.status(resolved.status).json({ message: resolved.message })
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('goal_records')
+      .select('id, goal_id, date, level, message')
+      .eq('goal_id', resolved.goal.id)
+      .order('date', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      throw error
+    }
+
+    res.json({
+      goalId: resolved.goal.id,
+      goalName: resolved.goal.name,
+      count: (data || []).length,
+      records: (data || []).map((record) => ({
+        id: record.id,
+        goalId: record.goal_id,
+        date: record.date,
+        level: record.level,
+        message: record.message ?? null,
+      })),
+    })
+  } catch (error) {
+    console.error('chatbot records read failed', error)
+    res.status(500).json({ message: 'failed to read chatbot records' })
+  }
+})
+
+app.put('/api/chatbot/records/:recordId', requireChatbotAuth, async (req, res) => {
+  const recordId = Number(req.params.recordId)
+  const { goalId, goalName, date, level, message } = req.body ?? {}
+
+  if (!recordId || !date || Number.isNaN(Number(level))) {
+    res.status(400).json({ message: 'invalid payload' })
+    return
+  }
+
+  try {
+    const record = await getOwnedChatbotRecord(recordId, req.userId)
+    if (!record) {
+      res.status(404).json({ message: 'record not found' })
+      return
+    }
+
+    if (goalId || goalName) {
+      const resolved = await resolveChatbotGoalForUser(req.userId, { goalId, goalName })
+      if (!resolved.ok) {
+        res.status(resolved.status).json({ message: resolved.message })
+        return
+      }
+      if (resolved.goal.id !== record.goalId) {
+        res.status(409).json({ message: 'record does not belong to goal' })
+        return
+      }
+    }
+
+    const normalizedMessage = String(message ?? '').trim() || null
+    const { data, error } = await supabase
+      .from('goal_records')
+      .update({
+        date,
+        level: Number(level),
+        message: normalizedMessage,
+      })
+      .eq('id', recordId)
+      .eq('goal_id', record.goalId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      res.status(404).json({ message: 'record not found' })
+      return
+    }
+
+    res.json({
+      ok: true,
+      recordId,
+      goalId: record.goalId,
+      goalName: record.goalName,
+    })
+  } catch (error) {
+    console.error('chatbot record update failed', error)
+    res.status(500).json({ message: 'failed to update chatbot record' })
+  }
+})
+
+app.delete('/api/chatbot/records/:recordId', requireChatbotAuth, async (req, res) => {
+  const recordId = Number(req.params.recordId)
+  const { goalId, goalName } = req.body ?? {}
+
+  if (!recordId) {
+    res.status(400).json({ message: 'invalid payload' })
+    return
+  }
+
+  try {
+    const record = await getOwnedChatbotRecord(recordId, req.userId)
+    if (!record) {
+      res.status(404).json({ message: 'record not found' })
+      return
+    }
+
+    if (goalId || goalName) {
+      const resolved = await resolveChatbotGoalForUser(req.userId, { goalId, goalName })
+      if (!resolved.ok) {
+        res.status(resolved.status).json({ message: resolved.message })
+        return
+      }
+      if (resolved.goal.id !== record.goalId) {
+        res.status(409).json({ message: 'record does not belong to goal' })
+        return
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('goal_records')
+      .delete()
+      .eq('id', recordId)
+      .eq('goal_id', record.goalId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      res.status(404).json({ message: 'record not found' })
+      return
+    }
+
+    res.json({
+      ok: true,
+      recordId,
+      goalId: record.goalId,
+      goalName: record.goalName,
+    })
+  } catch (error) {
+    console.error('chatbot record delete failed', error)
+    res.status(500).json({ message: 'failed to delete chatbot record' })
   }
 })
 
