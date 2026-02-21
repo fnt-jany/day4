@@ -46,6 +46,7 @@ type TrendChartProps = {
     tooltipMessage: string
     legendRecords: string
     legendTarget: string
+    legendTrend: string
     progressChartAria: string
   }
 }
@@ -139,6 +140,9 @@ const TEXT = {
     noGoalsYet: '아직 목표가 없습니다. 상단의 목표 추가 버튼을 눌러 시작하세요.',
     goalPrefix: '목표:',
     latestInput: '최근 입력:',
+    goalTrendOnTrack: '\uB2EC\uC131 \uC608\uC0C1',
+    goalTrendOffTrack: '\uBBF8\uB2EC \uC608\uC0C1',
+    goalTrendProjected: '\uCD94\uC138 \uC608\uCE21',
     none: '없음',
     enterStatus: '상태입력',
     viewRecords: '기록 보기',
@@ -147,6 +151,7 @@ const TEXT = {
     miniNoRecords: '기록 없음',
     legendRecords: '파란선: 기록',
     legendTarget: '빨간 점선: 목표수준',
+    legendTrend: '\uCD08\uB85D \uC810\uC120: \uCD94\uC138\uC120',
     tooltipDate: '날짜',
     tooltipLevel: '수준',
     tooltipMessage: '메시지',
@@ -223,6 +228,9 @@ const TEXT = {
     noGoalsYet: 'No goals yet. Click Add Goal to get started.',
     goalPrefix: 'Target:',
     latestInput: 'Latest entry:',
+    goalTrendOnTrack: 'On track',
+    goalTrendOffTrack: 'Off track',
+    goalTrendProjected: 'Trend projection',
     none: 'None',
     enterStatus: 'Enter Status',
     viewRecords: 'View Records',
@@ -231,6 +239,7 @@ const TEXT = {
     miniNoRecords: 'No records',
     legendRecords: 'Blue line: records',
     legendTarget: 'Red dashed line: target level',
+    legendTrend: 'Green dashed line: trend',
     tooltipDate: 'Date',
     tooltipLevel: 'Level',
     tooltipMessage: 'Message',
@@ -261,6 +270,72 @@ const getRecordsByDateAsc = (records: GoalInput[]) =>
 const getLatestRecord = (records: GoalInput[]) =>
   [...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
 
+type GoalTrendStatus = 'on_track' | 'off_track' | 'insufficient'
+
+type GoalTrendAssessment = {
+  status: GoalTrendStatus
+  projectedLevel: number | null
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const getGoalTrendAssessment = (goal: Goal): GoalTrendAssessment => {
+  const sorted = getRecordsByDateAsc(goal.inputs)
+
+  if (sorted.length < 2) {
+    return { status: 'insufficient', projectedLevel: null }
+  }
+
+  const firstTime = new Date(sorted[0].date).getTime()
+  const targetTime = new Date(goal.targetDate).getTime()
+
+  if (Number.isNaN(firstTime) || Number.isNaN(targetTime)) {
+    return { status: 'insufficient', projectedLevel: null }
+  }
+
+  const xs = sorted.map((record) => (new Date(record.date).getTime() - firstTime) / DAY_MS)
+  const ys = sorted.map((record) => record.level)
+
+  if (xs.some((value) => Number.isNaN(value))) {
+    return { status: 'insufficient', projectedLevel: null }
+  }
+
+  const count = xs.length
+  const xMean = xs.reduce((sum, value) => sum + value, 0) / count
+  const yMean = ys.reduce((sum, value) => sum + value, 0) / count
+
+  let numerator = 0
+  let denominator = 0
+
+  for (let index = 0; index < count; index += 1) {
+    const dx = xs[index] - xMean
+    numerator += dx * (ys[index] - yMean)
+    denominator += dx * dx
+  }
+
+  if (denominator === 0) {
+    return { status: 'insufficient', projectedLevel: null }
+  }
+
+  const slope = numerator / denominator
+  const intercept = yMean - slope * xMean
+  const targetX = (targetTime - firstTime) / DAY_MS
+  const projectedLevel = slope * targetX + intercept
+
+  if (!Number.isFinite(projectedLevel)) {
+    return { status: 'insufficient', projectedLevel: null }
+  }
+
+  const baseline = sorted[0].level
+  const isIncreaseGoal = goal.targetLevel >= baseline
+  const onTrack = isIncreaseGoal ? projectedLevel >= goal.targetLevel : projectedLevel <= goal.targetLevel
+
+  return {
+    status: onTrack ? 'on_track' : 'off_track',
+    projectedLevel,
+  }
+}
+
 const getXPositions = (
   records: GoalInput[],
   minX: number,
@@ -288,6 +363,50 @@ const getXPositions = (
   }
 
   return times.map((time) => minX + ((maxX - minX) * (time - minTime)) / (maxTime - minTime))
+}
+
+type TrendLine = {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+const getTrendLine = (
+  xPositions: number[],
+  levels: number[],
+  toY: (value: number) => number,
+): TrendLine | null => {
+  if (xPositions.length < 2 || levels.length < 2 || xPositions.length !== levels.length) {
+    return null
+  }
+
+  const count = xPositions.length
+  const xMean = xPositions.reduce((sum, x) => sum + x, 0) / count
+  const yMean = levels.reduce((sum, y) => sum + y, 0) / count
+
+  let numerator = 0
+  let denominator = 0
+
+  for (let index = 0; index < count; index += 1) {
+    const dx = xPositions[index] - xMean
+    numerator += dx * (levels[index] - yMean)
+    denominator += dx * dx
+  }
+
+  if (denominator === 0) {
+    return null
+  }
+
+  const slope = numerator / denominator
+  const intercept = yMean - slope * xMean
+
+  const x1 = xPositions[0]
+  const x2 = xPositions[count - 1]
+  const y1 = toY(slope * x1 + intercept)
+  const y2 = toY(slope * x2 + intercept)
+
+  return { x1, y1, x2, y2 }
 }
 
 async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -369,6 +488,11 @@ function MiniTrendChart({ records, targetLevel, spacingMode, emptyLabel, ariaLab
 
   const targetY = toY(targetLevel)
   const path = points.map((point) => `${point.x},${point.y}`).join(' ')
+  const trendLine = getTrendLine(
+    xPositions,
+    sorted.map((record) => record.level),
+    toY,
+  )
 
   return (
     <div className="mini-chart-wrap">
@@ -382,6 +506,17 @@ function MiniTrendChart({ records, targetLevel, spacingMode, emptyLabel, ariaLab
           strokeWidth="1.5"
           strokeDasharray="4 4"
         />
+        {trendLine ? (
+          <line
+            x1={trendLine.x1}
+            y1={trendLine.y1}
+            x2={trendLine.x2}
+            y2={trendLine.y2}
+            stroke="#2f9e44"
+            strokeWidth="1.5"
+            strokeDasharray="4 4"
+          />
+        ) : null}
         {points.length > 1 ? <polyline fill="none" stroke="#175cd3" strokeWidth="2" points={path} /> : null}
         {points.map((point, index) => (
           <circle key={index} cx={point.x} cy={point.y} r="2.5" fill="#175cd3" />
@@ -433,6 +568,11 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
 
   const polyline = points.map((point) => `${point.x},${point.y}`).join(' ')
   const targetY = toY(targetLevel)
+  const trendLine = getTrendLine(
+    xPositions,
+    records.map((record) => record.level),
+    toY,
+  )
 
   const yTicks = Array.from({ length: 5 }, (_, idx) => {
     const ratio = idx / 4
@@ -508,6 +648,17 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
           strokeDasharray="5 5"
         />
 
+        {trendLine ? (
+          <line
+            x1={trendLine.x1}
+            y1={trendLine.y1}
+            x2={trendLine.x2}
+            y2={trendLine.y2}
+            stroke="#2f9e44"
+            strokeWidth="2"
+            strokeDasharray="6 4"
+          />
+        ) : null}
         {points.length > 1 ? <polyline fill="none" stroke="#175cd3" strokeWidth="3" points={polyline} /> : null}
 
         {points.map((point) => (
@@ -571,6 +722,7 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
       <div className="chart-legend">
         <span>{text.legendRecords}</span>
         <span>{text.legendTarget}</span>
+        <span>{text.legendTrend}</span>
       </div>
     </div>
   )
@@ -1170,26 +1322,37 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
           <ul className="goal-list">
             {goals.map((goal) => {
               const latestInput = getLatestRecord(goal.inputs)
+              const trendAssessment = getGoalTrendAssessment(goal)
 
               return (
                 <li id={`goal-${goal.id}`} key={goal.id} className="goal-item">
                   <div className="goal-top">
                     <div className="goal-meta">
-                      <div className="goal-main">
+                      <div className="goal-title-row">
                         <strong>{goal.name}</strong>
-                        <p>
+                        {trendAssessment.status !== 'insufficient' ? (
+                          <span
+                            className={`goal-trend-badge ${trendAssessment.status === "on_track" ? "on-track" : "off-track"}`}
+                            title={`${text.goalTrendProjected}: ${trendAssessment.projectedLevel?.toFixed(1)} ${goal.unit} / ${goal.targetLevel} ${goal.unit}`}
+                          >
+                            {(trendAssessment.status === 'on_track' ? text.goalTrendOnTrack : text.goalTrendOffTrack) +
+                              ` | ${text.goalTrendProjected} ${trendAssessment.projectedLevel?.toFixed(1)} ${goal.unit}`}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="goal-summary">
+                        <p className="goal-summary-line">
                           {text.goalPrefix} {goal.targetLevel} {goal.unit} ({goal.targetDate})
                         </p>
-                        {latestInput ? (
-                          <p>
-                            {text.latestInput} {latestInput.level} {goal.unit} ({latestInput.date})
-                          </p>
-                        ) : (
-                          <p>
-                            {text.latestInput} {text.none}
-                          </p>
-                        )}
+                        <p className="goal-summary-line">
+                          {text.latestInput}{' '}
+                          {latestInput
+                            ? latestInput.level + ' ' + goal.unit + ' (' + latestInput.date + ')'
+                            : text.none}
+                        </p>
                       </div>
+
                       <button
                         type="button"
                         className="mini-chart-trigger"
@@ -1437,6 +1600,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
+
 
 
 

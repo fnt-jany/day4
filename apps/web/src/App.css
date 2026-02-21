@@ -183,33 +183,100 @@ button.secondary {
 }
 
 .goal-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   border: 1px solid #e2e6ef;
   border-radius: 12px;
   padding: 14px;
   background: #fff;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.goal-top {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .goal-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title title"
+    "summary chart";
+  column-gap: 8px;
+  row-gap: 6px;
   min-width: 0;
   flex: 1;
+  align-items: center;
 }
 
+.goal-title-row {
+  grid-area: title;
+  display: grid;
+  grid-template-columns: 9ch minmax(0, 1fr);
+  align-items: center;
+  column-gap: 14px;
+  min-width: 0;
+  width: 100%;
+}
 
-.goal-main strong {
+.goal-trend-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.goal-trend-badge.on-track {
+  background: #e8f7ed;
+  color: #1f7a3d;
+  border: 1px solid #b8e4c4;
+}
+
+.goal-trend-badge.off-track {
+  background: #fdf0ef;
+  color: #b9382f;
+  border: 1px solid #f1c3be;
+}
+
+.goal-summary {
+  grid-area: summary;
+  min-width: 0;
+  color: #44506a;
+  display: grid;
+  gap: 2px;
+}
+
+.goal-summary-line {
+  margin: 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.goal-title-row strong {
+  width: 9ch;
+  max-width: 9ch;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
   font-size: 18px;
 }
 
-.goal-main p {
-  margin: 4px 0;
-  color: #44506a;
-}
 
 .mini-chart-wrap {
   width: 170px;
@@ -219,9 +286,8 @@ button.secondary {
   background: #f9fbff;
   padding: 2px;
   flex: 0 0 auto;
-  margin-left: auto;
+  margin-left: 0;
 }
-
 
 .mini-chart {
   width: 100%;
@@ -241,17 +307,16 @@ button.secondary {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  margin-left: auto;
+  margin-left: 0;
 }
-
 
 .goal-actions {
   display: flex;
   gap: 8px;
   flex-wrap: nowrap;
-  margin-left: auto;
   justify-content: flex-end;
   align-self: center;
+  flex-shrink: 0;
 }
 
 .empty {
@@ -266,6 +331,17 @@ button.primary {
 }
 
 @media (max-width: 700px) {
+  .goal-title-row {
+    grid-template-columns: 9ch minmax(0, 1fr);
+    column-gap: 16px;
+  }
+
+  .goal-item {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
   .page-header {
     flex-direction: column;
     align-items: flex-start;
@@ -275,37 +351,21 @@ button.primary {
     grid-template-columns: 1fr;
   }
 
-  .goal-item,
+  .goal-top,
   .record-item {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .goal-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
-}
-
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
 
   .mini-chart-wrap,
   .mini-chart-empty {
-  width: 170px;
-  height: 70px;
-  border: 1px solid #dbe2f1;
-  border-radius: 8px;
-  background: #f9fbff;
-  color: #5f6c89;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
+    margin-left: 0;
+  }
 
   .record-text {
     width: 100%;
@@ -516,13 +576,7 @@ button.primary {
 }
 
 
-.mini-chart-trigger {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-}
+
 
 .goal-detail-panel {
   margin-top: 12px;
@@ -537,4 +591,17 @@ button.primary {
   padding: 10px;
   background: #f8fbff;
 }
+
+.mini-chart-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  grid-area: chart;
+  align-self: center;
+  justify-self: end;
+}
+
+
 
