@@ -959,6 +959,18 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     })
   }
 
+  const keepCurrentScrollPosition = () => {
+    const left = window.scrollX
+    const top = window.scrollY
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ left, top, behavior: 'auto' })
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ left, top, behavior: 'auto' })
+      })
+    })
+  }
+
   useEffect(() => {
     if (goalFormOpen && editingGoalId === null) {
       scrollGoalCreateFormIntoView()
@@ -967,6 +979,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
   const openCreateGoalForm = () => {
     if (goalFormOpen && editingGoalId === null) {
+      keepCurrentScrollPosition()
       closeGoalForm()
       return
     }
@@ -983,10 +996,13 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
   const openEditGoalForm = (goal: Goal) => {
     if (editingGoalId === goal.id) {
+      keepCurrentScrollPosition()
       closeGoalForm()
       return
     }
 
+    closeInputForm()
+    setRecordGoalId(null)
     scrollGoalIntoView(goal.id)
     setEditingGoalId(goal.id)
     setGoalForm({
@@ -1066,10 +1082,13 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
   const openInputForm = (goal: Goal) => {
     if (inputGoalId === goal.id && editingInputId === null) {
+      keepCurrentScrollPosition()
       closeInputForm()
       return
     }
 
+    closeGoalForm()
+    setRecordGoalId(null)
     scrollGoalIntoView(goal.id)
     setInputGoalId(goal.id)
     setEditingInputId(null)
@@ -1082,6 +1101,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
   const openInputEditForm = (goalId: number, record: GoalInput) => {
     if (inputGoalId === goalId && editingInputId === record.id) {
+      keepCurrentScrollPosition()
       closeInputForm()
       return
     }
@@ -1161,8 +1181,19 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   }
 
   const openRecordView = (goalId: number) => {
+    const isClosing = recordGoalId === goalId
+
+    closeGoalForm()
+    closeInputForm()
+
+    if (isClosing) {
+      keepCurrentScrollPosition()
+      setRecordGoalId(null)
+      return
+    }
+
     scrollGoalIntoView(goalId)
-    setRecordGoalId((prev) => (prev === goalId ? null : goalId))
+    setRecordGoalId(goalId)
   }
 
   return (
@@ -1653,31 +1684,5 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
