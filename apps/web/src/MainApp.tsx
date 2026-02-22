@@ -947,6 +947,24 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     scroll()
     window.requestAnimationFrame(scroll)
   }
+  const scrollGoalCreateFormIntoView = () => {
+    const scroll = () => {
+      const target = document.getElementById('goal-create-form')
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+
+    window.requestAnimationFrame(() => {
+      scroll()
+      window.requestAnimationFrame(scroll)
+    })
+  }
+
+  useEffect(() => {
+    if (goalFormOpen && editingGoalId === null) {
+      scrollGoalCreateFormIntoView()
+    }
+  }, [goalFormOpen, editingGoalId])
+
   const openCreateGoalForm = () => {
     if (goalFormOpen && editingGoalId === null) {
       closeGoalForm()
@@ -1290,7 +1308,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       {isLoading ? <p className="empty">{text.loading}</p> : null}
 
       {goalFormOpen && (
-        <section className="panel" aria-label="goal-form">
+        <section id="goal-create-form" className="panel" aria-label="goal-form">
           <h2>{text.goalCreate}</h2>
           <form className="form-grid" onSubmit={handleGoalSubmit}>
             <label>
