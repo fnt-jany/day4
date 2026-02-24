@@ -1,4 +1,4 @@
-﻿# Day4 monorepo
+# Day4 monorepo
 
 Web first (React + TypeScript + Vite), then mobile (React Native + TypeScript + Expo).
 
@@ -34,6 +34,7 @@ JWT_SECRET=
 API_PORT=8787
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+CORS_ALLOWED_ORIGINS=https://day4.fnt-works.com
 ```
 
 3. Run:
@@ -110,11 +111,15 @@ Web app default API base is:
 http://<current-hostname>:8787/api
 ```
 
-If needed, override with env var in `apps/web/.env`:
+If needed, override with env vars in `apps/web/.env`:
 
 ```text
 VITE_API_BASE_URL=http://<server-ip>:8787/api
+VITE_APP_TIMEZONE=Asia/Seoul
 ```
+
+`VITE_APP_TIMEZONE` controls default date generation in the UI (goal date / status date).
+Default is `Asia/Seoul` (KST).
 
 ## Build web app
 
@@ -133,6 +138,8 @@ Then install workspace dependencies again:
 ```bash
 npm install
 ```
+
+
 
 
 

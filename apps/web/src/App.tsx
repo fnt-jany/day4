@@ -408,11 +408,16 @@ function App() {
       loginDescription: '\uAD6C\uAE00 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD558\uBA74 \uB0B4 \uBAA9\uD45C/\uC124\uC815\uC774 \uBD84\uB9AC\uB418\uC5B4 \uAD00\uB9AC\uB429\uB2C8\uB2E4.',
       loginButtonHint: '\uB85C\uADF8\uC778 \uBC84\uD2BC\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.',
+      missingGoogleScript: 'Google \uB85C\uADF8\uC778 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+      googleScriptLoadFailed: 'Google \uB85C\uADF8\uC778 \uC2A4\uD06C\uB9BD\uD2B8 \uB85C\uB529\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
       loginFailed: '\uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.',
+      googleInitFailed: 'Google \uB85C\uADF8\uC778 \uBC84\uD2BC \uCD08\uAE30\uD654\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+      googleInitTimeout: 'Google \uB85C\uADF8\uC778 \uBC84\uD2BC \uCD08\uAE30\uD654\uAC00 \uC9C0\uC5F0\uB418\uACE0 \uC788\uC2B5\uB2C8\uB2E4. Google Cloud Console\uC758 Origin \uC124\uC815\uC744 \uD655\uC778\uD558\uC138\uC694.',
       guestLogin: '\uAC8C\uC2A4\uD2B8\uB85C \uB85C\uADF8\uC778',
       guestLoginFailed: '\uAC8C\uC2A4\uD2B8 \uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
       chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
       mcpGuide: 'MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+      debugOrigin: '\uD604\uC7AC Origin',
       loading: '\uBD88\uB7EC\uC624\uB294 \uC911...',
     },
     en: {
@@ -421,11 +426,16 @@ function App() {
       loginDescription: 'Sign in with Google to keep goals/settings separate per user.',
       loginButtonHint: 'Loading sign-in button...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID is not configured.',
+      missingGoogleScript: 'Google sign-in script tag is missing.',
+      googleScriptLoadFailed: 'Failed to load Google sign-in script.',
       loginFailed: 'Login failed. Please try again.',
+      googleInitFailed: 'Failed to initialize Google sign-in button.',
+      googleInitTimeout: 'Google sign-in initialization is taking too long. Check allowed JavaScript origins in Google Cloud Console.',
       guestLogin: 'Continue as Guest',
       guestLoginFailed: 'Guest login failed.',
       chatbotGuide: 'Chatbot Integration Guide',
       mcpGuide: 'MCP Integration Guide',
+      debugOrigin: 'Current origin',
       loading: 'Loading...',
     },
   }[loginLanguage]
@@ -498,7 +508,14 @@ function App() {
   }, [guideRoute, loadMe, loginLanguage])
 
   useEffect(() => {
-    if (guideRoute || user || !GOOGLE_CLIENT_ID) {
+    if (guideRoute !== 'none' || user || !GOOGLE_CLIENT_ID) {
+      return
+    }
+
+    let settled = false
+    const googleScript = document.querySelector<HTMLScriptElement>('script[src*="accounts.google.com/gsi/client"]')
+    if (!googleScript) {
+      setErrorMessage(`${text.missingGoogleScript} (${window.location.origin})`)
       return
     }
 
@@ -507,42 +524,77 @@ function App() {
         return false
       }
 
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: (response) => {
-          if (response.credential) {
-            void handleGoogleCredential(response.credential)
-          }
-        },
-      })
+      try {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (response) => {
+            if (response.credential) {
+              void handleGoogleCredential(response.credential)
+            }
+          },
+        })
 
-      googleButtonRef.current.innerHTML = ''
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        shape: 'pill',
-        text: 'signin_with',
-        width: 280,
-      })
-      setIsGoogleReady(true)
-      return true
+        googleButtonRef.current.innerHTML = ''
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          shape: 'pill',
+          text: 'signin_with',
+          width: 280,
+        })
+        settled = true
+        setErrorMessage(null)
+        setIsGoogleReady(true)
+        return true
+      } catch (error) {
+        settled = true
+        const reason = error instanceof Error ? error.message : String(error)
+        setErrorMessage(`${text.googleInitFailed} (${reason})`)
+        return false
+      }
     }
 
+    const onGoogleScriptError = () => {
+      settled = true
+      setErrorMessage(`${text.googleScriptLoadFailed} (${window.location.origin})`)
+    }
+    googleScript.addEventListener('error', onGoogleScriptError)
+
     if (initGoogle()) {
+      googleScript.removeEventListener('error', onGoogleScriptError)
       return
     }
 
     const timer = window.setInterval(() => {
       if (initGoogle()) {
         window.clearInterval(timer)
+        window.clearTimeout(timeoutTimer)
       }
     }, 250)
 
-    return () => window.clearInterval(timer)
-  }, [guideRoute, handleGoogleCredential, user])
+    const timeoutTimer = window.setTimeout(() => {
+      if (!settled) {
+        setErrorMessage(`${text.googleInitTimeout} (${window.location.origin})`)
+      }
+    }, 8000)
+
+    return () => {
+      window.clearInterval(timer)
+      window.clearTimeout(timeoutTimer)
+      googleScript.removeEventListener('error', onGoogleScriptError)
+    }
+  }, [
+    guideRoute,
+    handleGoogleCredential,
+    text.googleInitFailed,
+    text.googleInitTimeout,
+    text.googleScriptLoadFailed,
+    text.missingGoogleScript,
+    user,
+  ])
 
   useEffect(() => {
-    if (guideRoute) {
+    if (guideRoute !== 'none') {
       return
     }
     document.title = user ? 'Day4' : `${text.appTitle} - ${text.loginTitle}`
@@ -595,6 +647,7 @@ function App() {
           {GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
           {!GOOGLE_CLIENT_ID ? <p className="error-text">{text.missingGoogleClientId}</p> : null}
           {GOOGLE_CLIENT_ID && !isGoogleReady ? <p className="empty">{text.loginButtonHint}</p> : null}
+          {GOOGLE_CLIENT_ID ? <p className="auth-debug-origin">{text.debugOrigin}: {window.location.origin}</p> : null}
           <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
             {text.guestLogin}
           </button>
@@ -616,12 +669,5 @@ function App() {
 }
 
 export default App
-
-
-
-
-
-
-
 
 

@@ -12,6 +12,10 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID || ''
 const jwtSecret = process.env.JWT_SECRET || 'change-this-dev-secret'
 const supabaseUrl = process.env.SUPABASE_URL || ''
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const corsAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://day4.fnt-works.com')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 const googleClient = new OAuth2Client(googleClientId)
 const MAX_GOALS_PER_USER = 10
 const MAX_RECORDS_PER_GOAL = 100
@@ -24,7 +28,22 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: { persistSession: false },
 })
 
-app.use(cors())
+app.use(cors({
+  origin(origin, callback) {
+    // Allow non-browser clients (no Origin header) such as server-to-server calls.
+    if (!origin) {
+      callback(null, true)
+      return
+    }
+
+    if (corsAllowedOrigins.includes(origin)) {
+      callback(null, true)
+      return
+    }
+
+    callback(new Error('Not allowed by CORS'))
+  },
+}))
 app.use(express.json())
 
 const mapGoal = (row) => ({
@@ -1240,8 +1259,9 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
   }
 })
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`API server listening on http://0.0.0.0:${port}`)
+app.listen(port, '127.0.0.1', () => {
+  console.log(`API server listening on http://127.0.0.1:${port}`)
 })
+
 
 

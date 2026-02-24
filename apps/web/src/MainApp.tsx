@@ -123,7 +123,7 @@ const TEXT = {
     delete: '삭제',
     confirmDeleteGoal: '이 목표를 삭제할까요?',
     confirmDeleteRecord: '이 기록을 삭제할까요?',
-    statusInput: '상태 입력',
+    statusInput: '기록 입력',
     recordEdit: '기록 수정',
     date: '날짜',
     currentLevel: '현재수준',
@@ -144,7 +144,7 @@ const TEXT = {
     goalTrendOffTrack: '\uBBF8\uB2EC \uC608\uC0C1',
     goalTrendProjected: '\uCD94\uC138 \uC608\uCE21',
     none: '없음',
-    enterStatus: '상태입력',
+    enterStatus: '기록입력',
     viewRecords: '기록 보기',
     edit: '수정',
     noRecordsForChart: '기록이 없어 그래프를 표시할 수 없습니다.',
@@ -264,7 +264,29 @@ const TEXT = {
 } as const
 
 const AUTH_TOKEN_KEY = 'day4_auth_token'
-const getToday = () => new Date().toISOString().slice(0, 10)
+const DEFAULT_TIMEZONE = 'Asia/Seoul'
+const APP_TIMEZONE = import.meta.env.VITE_APP_TIMEZONE?.trim() || DEFAULT_TIMEZONE
+
+const createYmdFormatter = (timeZone: string) => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: DEFAULT_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  }
+}
+
+const todayFormatter = createYmdFormatter(APP_TIMEZONE)
+const getToday = () => todayFormatter.format(new Date())
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:8787/api`
 
@@ -1684,5 +1706,6 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
 
 
