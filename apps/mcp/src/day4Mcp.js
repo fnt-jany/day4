@@ -59,6 +59,34 @@ function toTextResult(payload) {
   }
 }
 
+function formatError(error) {
+  const message = error instanceof Error ? error.message : String(error)
+  const cause = error && typeof error === 'object' ? error.cause : null
+  const details = {}
+
+  if (error instanceof Error && error.name) {
+    details.name = error.name
+  }
+
+  if (cause && typeof cause === 'object') {
+    if ('code' in cause && cause.code) {
+      details.causeCode = String(cause.code)
+    }
+    if ('message' in cause && cause.message) {
+      details.causeMessage = String(cause.message)
+    }
+  }
+
+  return Object.keys(details).length > 0 ? { message, details } : { message }
+}
+
+function errorResult(error) {
+  const formatted = formatError(error)
+  if (formatted.details) {
+    return { ok: false, error: formatted.message, errorDetails: formatted.details }
+  }
+  return { ok: false, error: formatted.message }
+}
 function validateApiKeyOrReturn(apiKey) {
   if (!validateChatbotApiKey(apiKey)) {
     return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
@@ -88,7 +116,7 @@ export function createDay4McpServer() {
         const goals = await requestDay4('/goals', apiKey, { method: 'GET' })
         return toTextResult({ ok: true, count: Array.isArray(goals) ? goals.length : 0, goals })
       } catch (error) {
-        return toTextResult({ ok: false, error: String(error?.message || error) })
+        return toTextResult(errorResult(error))
       }
     },
   )
@@ -121,7 +149,7 @@ export function createDay4McpServer() {
         const result = await requestDay4(`/records?${query.toString()}`, apiKey, { method: 'GET' })
         return toTextResult(result)
       } catch (error) {
-        return toTextResult({ ok: false, error: String(error?.message || error) })
+        return toTextResult(errorResult(error))
       }
     },
   )
@@ -155,7 +183,7 @@ export function createDay4McpServer() {
 
         return toTextResult({ ok: true, record: created })
       } catch (error) {
-        return toTextResult({ ok: false, error: String(error?.message || error) })
+        return toTextResult(errorResult(error))
       }
     },
   )
@@ -185,7 +213,7 @@ export function createDay4McpServer() {
         })
         return toTextResult(result)
       } catch (error) {
-        return toTextResult({ ok: false, error: String(error?.message || error) })
+        return toTextResult(errorResult(error))
       }
     },
   )
@@ -212,7 +240,7 @@ export function createDay4McpServer() {
         })
         return toTextResult(result)
       } catch (error) {
-        return toTextResult({ ok: false, error: String(error?.message || error) })
+        return toTextResult(errorResult(error))
       }
     },
   )
@@ -252,10 +280,11 @@ export function createDay4McpServer() {
 
         return toTextResult(result)
       } catch (error) {
-        return toTextResult({ ok: false, error: String(error?.message || error) })
+        return toTextResult(errorResult(error))
       }
     },
   )
 
   return server
 }
+
