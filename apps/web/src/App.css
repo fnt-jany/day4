@@ -8,7 +8,7 @@
   padding: 24px 16px 48px;
 }
 
-.page-header {
+  .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -193,6 +193,11 @@ button.secondary {
   overflow: hidden;
 }
 
+.goal-item-dragging {
+  opacity: 0.6;
+}
+
+
 .goal-top {
   display: flex;
   flex-direction: column;
@@ -317,6 +322,24 @@ button.secondary {
   flex-shrink: 0;
 }
 
+.goal-reorder-handle {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.goal-reorder-handle:active {
+  cursor: grabbing;
+}
+
+
 .empty {
   margin: 0;
   color: #5f6c89;
@@ -378,7 +401,7 @@ button.primary {
     width: 100%;
   }
 
-  .goal-actions button,
+  .goal-actions button:not(.goal-reorder-handle),
   .record-actions button {
     flex: 1;
   }
@@ -441,8 +464,8 @@ button.primary {
   width: 40px;
   height: 40px;
   border-radius: 999px;
-  border: 1px solid #175cd3;
-  background: #175cd3;
+  border: 1px solid var(--profile-border, #175cd3);
+  background: var(--profile-bg, #175cd3);
   color: #fff;
   font-weight: 700;
   display: inline-flex;
@@ -610,4 +633,6 @@ button.primary {
   align-self: center;
   justify-self: end;
 }
+
+
 

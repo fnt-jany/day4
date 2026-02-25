@@ -19,6 +19,7 @@ const corsAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://day4.fn
 const googleClient = new OAuth2Client(googleClientId)
 const MAX_GOALS_PER_USER = 10
 const MAX_RECORDS_PER_GOAL = 100
+const GOAL_ORDER_SETTING_KEY = 'goal_order_ids'
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
   throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
@@ -313,18 +314,85 @@ const requireChatbotAuth = async (req, res, next) => {
   }
 }
 
+const parseGoalOrderValue = (value) => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    const order = []
+    const seen = new Set()
+    for (const rawId of parsed) {
+      const goalId = Number(rawId)
+      if (!Number.isInteger(goalId) || goalId <= 0 || seen.has(goalId)) {
+        continue
+      }
+      seen.add(goalId)
+      order.push(goalId)
+    }
+
+    return order
+  } catch {
+    return []
+  }
+}
+
+const applyGoalOrder = (goals, orderedGoalIds) => {
+  if (!Array.isArray(goals) || goals.length === 0) {
+    return []
+  }
+
+  if (!Array.isArray(orderedGoalIds) || orderedGoalIds.length === 0) {
+    return goals
+  }
+
+  const orderIndexById = new Map(orderedGoalIds.map((goalId, index) => [goalId, index]))
+
+  return [...goals].sort((a, b) => {
+    const aIndex = orderIndexById.get(a.id)
+    const bIndex = orderIndexById.get(b.id)
+
+    const aHasOrder = typeof aIndex === 'number'
+    const bHasOrder = typeof bIndex === 'number'
+
+    if (aHasOrder && bHasOrder) {
+      return aIndex - bIndex
+    }
+
+    if (aHasOrder) {
+      return -1
+    }
+
+    if (bHasOrder) {
+      return 1
+    }
+
+    return b.id - a.id
+  })
+}
 async function listGoals(userId) {
-  const { data: goalRows, error: goalsError } = await supabase
-    .from('goals')
-    .select('id, name, target_date, target_level, unit')
-    .eq('user_id', userId)
-    .order('id', { ascending: false })
+  const [goalsResponse, goalOrderSetting] = await Promise.all([
+    supabase
+      .from('goals')
+      .select('id, name, target_date, target_level, unit')
+      .eq('user_id', userId)
+      .order('id', { ascending: false }),
+    getUserSetting(userId, GOAL_ORDER_SETTING_KEY),
+  ])
+
+  const { data: goalRows, error: goalsError } = goalsResponse
 
   if (goalsError) {
     throw goalsError
   }
 
-  const goals = (goalRows || []).map(mapGoal)
+  const orderedGoalIds = parseGoalOrderValue(goalOrderSetting)
+  const goals = applyGoalOrder((goalRows || []).map(mapGoal), orderedGoalIds)
 
   if (goals.length === 0) {
     return []
@@ -1030,6 +1098,59 @@ app.get('/api/goals', requireAuth, async (req, res) => {
   }
 })
 
+app.put('/api/goals/order', requireAuth, async (req, res) => {
+  const goalIds = req.body?.goalIds
+
+  if (!Array.isArray(goalIds)) {
+    res.status(400).json({ message: 'goalIds must be an array' })
+    return
+  }
+
+  const parsedIds = []
+  const seen = new Set()
+
+  for (const rawId of goalIds) {
+    const goalId = Number(rawId)
+    if (!Number.isInteger(goalId) || goalId <= 0 || seen.has(goalId)) {
+      res.status(400).json({ message: 'goalIds must contain unique positive integers' })
+      return
+    }
+    seen.add(goalId)
+    parsedIds.push(goalId)
+  }
+
+  try {
+    const { data: ownedGoals, error } = await supabase
+      .from('goals')
+      .select('id')
+      .eq('user_id', req.userId)
+
+    if (error) {
+      throw error
+    }
+
+    const ownedIds = (ownedGoals || []).map((goal) => Number(goal.id))
+
+    if (ownedIds.length !== parsedIds.length) {
+      res.status(400).json({ message: 'goalIds must include all goals exactly once' })
+      return
+    }
+
+    const ownedIdSet = new Set(ownedIds)
+    for (const goalId of parsedIds) {
+      if (!ownedIdSet.has(goalId)) {
+        res.status(400).json({ message: 'goalIds contains a goal that is not owned by user' })
+        return
+      }
+    }
+
+    await setUserSetting(req.userId, GOAL_ORDER_SETTING_KEY, JSON.stringify(parsedIds))
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('goal order update failed', error)
+    res.status(500).json({ message: 'failed to update goal order' })
+  }
+})
 app.post('/api/goals', requireAuth, async (req, res) => {
   const { name, targetDate, targetLevel, unit } = req.body ?? {}
 
@@ -1262,6 +1383,3 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
 app.listen(port, '127.0.0.1', () => {
   console.log(`API server listening on http://127.0.0.1:${port}`)
 })
-
-
-

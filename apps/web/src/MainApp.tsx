@@ -1,5 +1,5 @@
 ﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, DragEvent, FormEvent, TouchEvent } from 'react'
 import './App.css'
 
 type GoalInput = {
@@ -147,6 +147,7 @@ const TEXT = {
     enterStatus: '기록입력',
     viewRecords: '기록 보기',
     edit: '수정',
+    reorderGoals: '순서 변경',
     noRecordsForChart: '기록이 없어 그래프를 표시할 수 없습니다.',
     miniNoRecords: '기록 없음',
     legendRecords: '파란선: 기록',
@@ -167,6 +168,7 @@ const TEXT = {
       saveRecord: '기록 저장에 실패했습니다.',
       recordLimit: '\uAE30\uB85D\uC740 \uBAA9\uD45C\uB2F9 \uCD5C\uB300 100\uAC1C\uAE4C\uC9C0 \uC800\uC7A5\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
       deleteRecord: '기록 삭제에 실패했습니다.',
+      saveGoalOrder: '목표 순서 저장에 실패했습니다.',
     },
   },
   en: {
@@ -237,6 +239,7 @@ const TEXT = {
     enterStatus: 'Enter Status',
     viewRecords: 'View Records',
     edit: 'Edit',
+    reorderGoals: 'Reorder goals',
     noRecordsForChart: 'No records available to render this chart.',
     miniNoRecords: 'No records',
     legendRecords: 'Blue line: records',
@@ -259,6 +262,7 @@ const TEXT = {
       saveRecord: 'Failed to save record.',
       recordLimit: 'You can store up to 100 records per goal.',
       deleteRecord: 'Failed to delete record.',
+      saveGoalOrder: 'Failed to save goal order.',
     },
   },
 } as const
@@ -307,6 +311,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 const GOAL_LIMIT_API_MESSAGE = 'goal limit reached (10)'
 const RECORD_LIMIT_API_MESSAGE = 'record limit reached (100)'
+const GOAL_REORDER_LONG_PRESS_MS = 350
+const GOAL_REORDER_MOVE_CANCEL_PX = 10
 
 type ApiRequestError = Error & {
   status: number
@@ -775,6 +781,30 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
   )
 }
 
+const PROFILE_BADGE_PALETTE = [
+  { bg: '#175cd3', border: '#0f4db8' },
+  { bg: '#0e9384', border: '#0b7a6d' },
+  { bg: '#b54708', border: '#93370d' },
+  { bg: '#8e4ec6', border: '#7a3eb4' },
+  { bg: '#c4325f', border: '#a3264c' },
+  { bg: '#2d6a4f', border: '#245642' },
+  { bg: '#5b4db2', border: '#4a3f97' },
+  { bg: '#0b7fab', border: '#0a678b' },
+]
+
+const getProfileColorIndex = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) {
+    return 0
+  }
+
+  let hash = 0
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0
+  }
+
+  return hash % PROFILE_BADGE_PALETTE.length
+}
 function App({ profileName, onLogout }: { profileName: string; onLogout: () => void }) {
   const [goals, setGoals] = useState<Goal[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -787,6 +817,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const [editingInputId, setEditingInputId] = useState<number | null>(null)
 
   const [recordGoalId, setRecordGoalId] = useState<number | null>(null)
+  const [draggingGoalId, setDraggingGoalId] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chartSpacingMode, setChartSpacingMode] = useState<ChartSpacingMode>('equal')
   const [language, setLanguage] = useState<Language>('ko')
@@ -798,9 +829,23 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const [isRevokingChatbotKey, setIsRevokingChatbotKey] = useState(false)
   const [chatbotKeyNotice, setChatbotKeyNotice] = useState<string | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const goalReorderLongPressTimerRef = useRef<number | null>(null)
+  const goalReorderTouchIdRef = useRef<number | null>(null)
+  const goalReorderTouchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const goalReorderSourceGoalIdRef = useRef<number | null>(null)
+  const goalReorderDropTargetRef = useRef<number | null>(null)
+  const goalReorderActiveRef = useRef(false)
 
   const text = TEXT[language]
   const profileInitial = profileName.trim().charAt(0).toUpperCase() || '?'
+  const profileBadgeStyle = useMemo(() => {
+    const colorIndex = getProfileColorIndex(profileName)
+    const paletteItem = PROFILE_BADGE_PALETTE[colorIndex]
+    return {
+      '--profile-bg': paletteItem.bg,
+      '--profile-border': paletteItem.border,
+    } as CSSProperties
+  }, [profileName])
 
   const [goalForm, setGoalForm] = useState<GoalFormState>({
     name: '',
@@ -953,6 +998,12 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   useEffect(() => {
     document.title = text.appTitle
   }, [text.appTitle])
+
+  useEffect(() => {
+    return () => {
+      clearGoalTouchLongPress()
+    }
+  }, [])
 
   const scrollGoalIntoView = (goalId: number) => {
     window.requestAnimationFrame(() => {
@@ -1202,6 +1253,167 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     }
   }
 
+  const saveGoalOrder = async (orderedGoalIds: number[]) => {
+    await requestApi('/goals/order', {
+      method: 'PUT',
+      body: JSON.stringify({ goalIds: orderedGoalIds }),
+    })
+  }
+
+  const clearGoalTouchLongPress = () => {
+    if (goalReorderLongPressTimerRef.current !== null) {
+      window.clearTimeout(goalReorderLongPressTimerRef.current)
+      goalReorderLongPressTimerRef.current = null
+    }
+  }
+
+  const resetGoalTouchReorderState = () => {
+    clearGoalTouchLongPress()
+    goalReorderTouchIdRef.current = null
+    goalReorderTouchStartRef.current = null
+    goalReorderDropTargetRef.current = null
+    goalReorderSourceGoalIdRef.current = null
+    goalReorderActiveRef.current = false
+    setDraggingGoalId(null)
+  }
+
+  const reorderGoalsFromSourceToTarget = async (sourceGoalId: number, targetGoalId: number) => {
+    if (sourceGoalId === targetGoalId) {
+      return
+    }
+
+    const sourceIndex = goals.findIndex((goal) => goal.id === sourceGoalId)
+    const targetIndex = goals.findIndex((goal) => goal.id === targetGoalId)
+
+    if (sourceIndex < 0 || targetIndex < 0) {
+      return
+    }
+
+    const previousGoals = goals
+    const reorderedGoals = [...goals]
+    const [movedGoal] = reorderedGoals.splice(sourceIndex, 1)
+    reorderedGoals.splice(targetIndex, 0, movedGoal)
+
+    setGoals(reorderedGoals)
+
+    try {
+      await saveGoalOrder(reorderedGoals.map((goal) => goal.id))
+    } catch (error) {
+      setGoals(previousGoals)
+      const apiError = error as Partial<ApiRequestError>
+      const detail = apiError.apiMessage ?? (typeof apiError.status === 'number' ? `HTTP ${apiError.status}` : null)
+      setErrorMessage(detail ? `${text.errors.saveGoalOrder} (${detail})` : text.errors.saveGoalOrder)
+      await loadGoals()
+    }
+  }
+
+  const handleGoalDragStart = (event: DragEvent<HTMLButtonElement>, goalId: number) => {
+    setDraggingGoalId(goalId)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(goalId))
+  }
+
+  const handleGoalDragOver = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleGoalDrop = async (targetGoalId: number) => {
+    const sourceGoalId = draggingGoalId
+    setDraggingGoalId(null)
+
+    if (sourceGoalId === null) {
+      return
+    }
+
+    await reorderGoalsFromSourceToTarget(sourceGoalId, targetGoalId)
+  }
+
+  const handleGoalTouchStart = (event: TouchEvent<HTMLButtonElement>, goalId: number) => {
+    if (event.touches.length !== 1) {
+      return
+    }
+
+    const touch = event.touches[0]
+    clearGoalTouchLongPress()
+    goalReorderTouchIdRef.current = touch.identifier
+    goalReorderTouchStartRef.current = { x: touch.clientX, y: touch.clientY }
+    goalReorderSourceGoalIdRef.current = goalId
+    goalReorderDropTargetRef.current = goalId
+    goalReorderActiveRef.current = false
+
+    goalReorderLongPressTimerRef.current = window.setTimeout(() => {
+      goalReorderActiveRef.current = true
+      setDraggingGoalId(goalId)
+    }, GOAL_REORDER_LONG_PRESS_MS)
+  }
+
+  const handleGoalTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    const touchId = goalReorderTouchIdRef.current
+    if (touchId === null) {
+      return
+    }
+
+    const touch = Array.from(event.changedTouches).find((item) => item.identifier === touchId)
+    if (!touch) {
+      return
+    }
+
+    const start = goalReorderTouchStartRef.current
+    if (!goalReorderActiveRef.current && start) {
+      const movedX = Math.abs(touch.clientX - start.x)
+      const movedY = Math.abs(touch.clientY - start.y)
+      if (movedX > GOAL_REORDER_MOVE_CANCEL_PX || movedY > GOAL_REORDER_MOVE_CANCEL_PX) {
+        clearGoalTouchLongPress()
+      }
+      return
+    }
+
+    if (!goalReorderActiveRef.current) {
+      return
+    }
+
+    event.preventDefault()
+    const dropElement = document.elementFromPoint(touch.clientX, touch.clientY)
+    const goalItemElement = dropElement?.closest<HTMLElement>('[data-goal-id]')
+    if (!goalItemElement) {
+      return
+    }
+
+    const targetGoalId = Number(goalItemElement.dataset.goalId)
+    if (Number.isInteger(targetGoalId) && targetGoalId > 0) {
+      goalReorderDropTargetRef.current = targetGoalId
+    }
+  }
+
+  const handleGoalTouchEnd = async (event: TouchEvent<HTMLButtonElement>) => {
+    const touchId = goalReorderTouchIdRef.current
+    if (touchId === null) {
+      return
+    }
+
+    const touch = Array.from(event.changedTouches).find((item) => item.identifier === touchId)
+    if (!touch) {
+      return
+    }
+
+    const sourceGoalId = goalReorderSourceGoalIdRef.current
+    const targetGoalId = goalReorderDropTargetRef.current
+    const isActive = goalReorderActiveRef.current
+
+    resetGoalTouchReorderState()
+
+    if (!isActive || sourceGoalId === null || targetGoalId === null) {
+      return
+    }
+
+    await reorderGoalsFromSourceToTarget(sourceGoalId, targetGoalId)
+  }
+
+  const handleGoalTouchCancel = () => {
+    resetGoalTouchReorderState()
+  }
+
   const openRecordView = (goalId: number) => {
     const isClosing = recordGoalId === goalId
 
@@ -1230,6 +1442,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
             <button
               type="button"
               className="profile-trigger"
+              style={profileBadgeStyle}
               onClick={() => setProfileMenuOpen((prev) => !prev)}
               aria-haspopup="menu"
               aria-expanded={profileMenuOpen}
@@ -1315,7 +1528,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                 checked={language === 'ko'}
                 onChange={() => void updateLanguage('ko')}
               />
-              한국어
+              í•œêµ­ì–´
             </label>
             <label className="settings-option">
               <input
@@ -1431,7 +1644,14 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
               const trendAssessment = getGoalTrendAssessment(goal)
 
               return (
-                <li id={`goal-${goal.id}`} key={goal.id} className="goal-item">
+                <li
+                  id={`goal-${goal.id}`}
+                  key={goal.id}
+                  data-goal-id={goal.id}
+                  className={`goal-item${draggingGoalId === goal.id ? ' goal-item-dragging' : ''}`}
+                  onDragOver={handleGoalDragOver}
+                  onDrop={() => void handleGoalDrop(goal.id)}
+                >
                   <div className="goal-top">
                     <div className="goal-meta">
                       <div className="goal-title-row">
@@ -1477,6 +1697,21 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                     </div>
 
                     <div className="goal-actions">
+                      <button
+                        type="button"
+                        className="goal-reorder-handle"
+                        draggable
+                        onDragStart={(event) => handleGoalDragStart(event, goal.id)}
+                        onDragEnd={() => setDraggingGoalId(null)}
+                        onTouchStart={(event) => handleGoalTouchStart(event, goal.id)}
+                        onTouchMove={handleGoalTouchMove}
+                        onTouchEnd={(event) => void handleGoalTouchEnd(event)}
+                        onTouchCancel={handleGoalTouchCancel}
+                        aria-label={text.reorderGoals}
+                        title={text.reorderGoals}
+                      >
+                        ☰
+                      </button>
                       <button type="button" className="primary" onClick={() => openInputForm(goal)}>
                         {text.enterStatus}
                       </button>
@@ -1706,6 +1941,14 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
+
+
+
+
+
+
+
 
 
 

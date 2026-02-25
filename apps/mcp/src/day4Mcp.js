@@ -10,6 +10,24 @@ if (!rawBase) {
 
 const apiBase = rawBase.replace(/\/+$/, '')
 
+const READ_ONLY_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+}
+
+const WRITE_TOOL_ANNOTATIONS = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  openWorldHint: false,
+}
+
+const DELETE_TOOL_ANNOTATIONS = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  openWorldHint: false,
+}
+
 function validateChatbotApiKey(apiKey) {
   return typeof apiKey === 'string' && apiKey.startsWith('day4_ck_')
 }
@@ -87,6 +105,7 @@ function errorResult(error) {
   }
   return { ok: false, error: formatted.message }
 }
+
 function validateApiKeyOrReturn(apiKey) {
   if (!validateChatbotApiKey(apiKey)) {
     return toTextResult({ ok: false, error: 'Invalid key format. Expected key starting with day4_ck_.' })
@@ -97,7 +116,7 @@ function validateApiKeyOrReturn(apiKey) {
 export function createDay4McpServer() {
   const server = new McpServer({
     name: 'day4-mcp',
-    version: '0.6.0',
+    version: '0.7.0',
   })
 
   server.tool(
@@ -106,6 +125,7 @@ export function createDay4McpServer() {
     {
       apiKey: z.string().min(12),
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ apiKey }) => {
       const invalid = validateApiKeyOrReturn(apiKey)
       if (invalid) {
@@ -130,6 +150,7 @@ export function createDay4McpServer() {
       goalName: z.string().trim().min(1).optional(),
       limit: z.number().int().min(1).max(100).optional(),
     },
+    READ_ONLY_TOOL_ANNOTATIONS,
     async ({ apiKey, goalId, goalName, limit }) => {
       if (!goalId && !goalName) {
         return toTextResult({ ok: false, error: 'Either goalId or goalName is required.' })
@@ -165,6 +186,7 @@ export function createDay4McpServer() {
       level: z.number(),
       message: z.string().trim().max(500).optional(),
     },
+    WRITE_TOOL_ANNOTATIONS,
     async ({ apiKey, goalId, goalName, date, level, message }) => {
       if (!goalId && !goalName) {
         return toTextResult({ ok: false, error: 'Either goalId or goalName is required.' })
@@ -200,6 +222,7 @@ export function createDay4McpServer() {
       level: z.number(),
       message: z.string().trim().max(500).optional(),
     },
+    WRITE_TOOL_ANNOTATIONS,
     async ({ apiKey, recordId, goalId, goalName, date, level, message }) => {
       const invalid = validateApiKeyOrReturn(apiKey)
       if (invalid) {
@@ -227,6 +250,7 @@ export function createDay4McpServer() {
       goalId: z.number().int().positive().optional(),
       goalName: z.string().trim().min(1).optional(),
     },
+    DELETE_TOOL_ANNOTATIONS,
     async ({ apiKey, recordId, goalId, goalName }) => {
       const invalid = validateApiKeyOrReturn(apiKey)
       if (invalid) {
@@ -266,6 +290,7 @@ export function createDay4McpServer() {
         .min(1)
         .max(50),
     },
+    WRITE_TOOL_ANNOTATIONS,
     async ({ apiKey, records }) => {
       const invalid = validateApiKeyOrReturn(apiKey)
       if (invalid) {
@@ -287,4 +312,3 @@ export function createDay4McpServer() {
 
   return server
 }
-
