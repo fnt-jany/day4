@@ -1,4 +1,4 @@
-﻿#root {
+#root {
   margin: 0;
 }
 
@@ -448,14 +448,6 @@ button.primary {
   color: #b42318;
 }
 
-.auth-debug-origin {
-  margin-top: 8px;
-  margin-bottom: 0;
-  color: #5f6c89;
-  font-size: 12px;
-  word-break: break-all;
-}
-
 .profile-menu {
   position: relative;
 }
@@ -633,6 +625,7 @@ button.primary {
   align-self: center;
   justify-self: end;
 }
+
 
 
 
