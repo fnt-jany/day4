@@ -7,6 +7,7 @@ type GoalInput = {
   date: string
   level: number
   message?: string
+  createdAt?: string
 }
 
 type Goal = {
@@ -293,11 +294,24 @@ const getToday = () => todayFormatter.format(new Date())
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:8787/api`
 
+const compareRecordsAsc = (a: GoalInput, b: GoalInput) => {
+  const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime()
+  if (dateDiff !== 0) return dateDiff
+
+  const createdA = a.createdAt ? new Date(a.createdAt).getTime() : Number.NaN
+  const createdB = b.createdAt ? new Date(b.createdAt).getTime() : Number.NaN
+  if (Number.isFinite(createdA) && Number.isFinite(createdB) && createdA !== createdB) {
+    return createdA - createdB
+  }
+
+  return a.id - b.id
+}
+
 const getRecordsByDateAsc = (records: GoalInput[]) =>
-  [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  [...records].sort(compareRecordsAsc)
 
 const getLatestRecord = (records: GoalInput[]) =>
-  [...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+  [...records].sort((a, b) => compareRecordsAsc(b, a))[0]
 
 type GoalTrendStatus = 'on_track' | 'off_track' | 'insufficient'
 
@@ -1527,7 +1541,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                 checked={language === 'ko'}
                 onChange={() => void updateLanguage('ko')}
               />
-              í•œêµ­ì–´
+              한국어
             </label>
             <label className="settings-option">
               <input
@@ -1940,6 +1954,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
 
 
 

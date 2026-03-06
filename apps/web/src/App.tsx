@@ -58,6 +58,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const AUTH_TOKEN_KEY = 'day4_auth_token'
 const CHATBOT_GUIDE_HASH = '#/chatbot-guide'
 const MCP_GUIDE_HASH = '#/mcp-guide'
+const GUEST_ROUTE_PATH = '/guest'
 
 type GuideRoute = 'none' | 'chatbot' | 'mcp'
 
@@ -417,8 +418,10 @@ function App() {
       guestLoginFailed: '\uAC8C\uC2A4\uD2B8 \uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
       chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
       mcpGuide: 'MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
-      debugOrigin: '\uD604\uC7AC Origin',
       loading: '\uBD88\uB7EC\uC624\uB294 \uC911...',
+      guestPageTitle: '\uAC8C\uC2A4\uD2B8 \uCCB4\uD5D8',
+      guestPageDescription: 'Google \uB85C\uADF8\uC778 \uC5C6\uC774 Day4\uB97C \uBC14\uB85C \uCCB4\uD5D8\uD558\uC138\uC694. \uAC8C\uC2A4\uD2B8 \uBAA8\uB4DC\uC5D0\uC11C\uB3C4 \uBAA9\uD45C\uC640 \uAE30\uB85D \uAE30\uB2A5\uC744 \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+      backToMainLogin: '\uBA54\uC778 \uB85C\uADF8\uC778\uC73C\uB85C',
     },
     en: {
       appTitle: 'Day4',
@@ -435,8 +438,10 @@ function App() {
       guestLoginFailed: 'Guest login failed.',
       chatbotGuide: 'Chatbot Integration Guide',
       mcpGuide: 'MCP Integration Guide',
-      debugOrigin: 'Current origin',
       loading: 'Loading...',
+      guestPageTitle: 'Guest Experience',
+      guestPageDescription: 'Try Day4 instantly without Google login. In guest mode, you can freely explore test data.',
+      backToMainLogin: 'Go to main login',
     },
   }[loginLanguage]
 
@@ -626,6 +631,45 @@ function App() {
   }
 
   if (!user) {
+    const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
+    const isGuestPage = pathname === GUEST_ROUTE_PATH
+
+    if (isGuestPage) {
+      return (
+        <main className="auth-page">
+          <section className="auth-card">
+            <h1>{text.appTitle}</h1>
+            <h2>{text.guestPageTitle}</h2>
+            <p>{text.guestPageDescription}</p>
+
+            <div className="settings-row auth-lang-row">
+              <label className="settings-option">
+                <input type="radio" name="auth-language" checked={loginLanguage === 'ko'} onChange={() => setLoginLanguage('ko')} />
+                {'\uD55C\uAD6D\uC5B4'}
+              </label>
+              <label className="settings-option">
+                <input type="radio" name="auth-language" checked={loginLanguage === 'en'} onChange={() => setLoginLanguage('en')} />
+                English
+              </label>
+            </div>
+
+            <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
+              {text.guestLogin}
+            </button>
+            <p className="guide-link-wrap">
+              <a href="/">{text.backToMainLogin}</a>
+            </p>
+            <p className="guide-link-wrap">
+              <a href={CHATBOT_GUIDE_HASH}>{text.chatbotGuide}</a>
+              {' | '}
+              <a href={MCP_GUIDE_HASH}>{text.mcpGuide}</a>
+            </p>
+            {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
+          </section>
+        </main>
+      )
+    }
+
     return (
       <main className="auth-page">
         <section className="auth-card">
@@ -647,7 +691,6 @@ function App() {
           {GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
           {!GOOGLE_CLIENT_ID ? <p className="error-text">{text.missingGoogleClientId}</p> : null}
           {GOOGLE_CLIENT_ID && !isGoogleReady ? <p className="empty">{text.loginButtonHint}</p> : null}
-          {GOOGLE_CLIENT_ID ? <p className="auth-debug-origin">{text.debugOrigin}: {window.location.origin}</p> : null}
           <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
             {text.guestLogin}
           </button>

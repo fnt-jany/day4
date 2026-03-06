@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import jwt from 'jsonwebtoken'
@@ -401,9 +401,10 @@ async function listGoals(userId) {
   const goalIds = goals.map((goal) => goal.id)
   const { data: recordRows, error: recordsError } = await supabase
     .from('goal_records')
-    .select('id, goal_id, date, level, message')
+    .select('id, goal_id, date, level, message, created_at')
     .in('goal_id', goalIds)
     .order('date', { ascending: false })
+    .order('created_at', { ascending: false })
     .order('id', { ascending: false })
 
   if (recordsError) {
@@ -420,6 +421,7 @@ async function listGoals(userId) {
       date: record.date,
       level: record.level,
       message: record.message ?? undefined,
+      createdAt: record.created_at ?? undefined,
     })
   }
 
@@ -773,7 +775,7 @@ const resolveChatbotGoalForUser = async (userId, { goalId, goalName }) => {
 const getOwnedChatbotRecord = async (recordId, userId) => {
   const { data, error } = await supabase
     .from('goal_records')
-    .select('id, goal_id, date, level, message')
+    .select('id, goal_id, date, level, message, created_at')
     .eq('id', recordId)
     .maybeSingle()
 
@@ -877,7 +879,7 @@ app.get('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
 
     const { data, error } = await supabase
       .from('goal_records')
-      .select('id, goal_id, date, level, message')
+      .select('id, goal_id, date, level, message, created_at')
       .eq('goal_id', resolved.goal.id)
       .order('date', { ascending: false })
       .order('id', { ascending: false })
@@ -897,6 +899,7 @@ app.get('/api/chatbot/records', requireChatbotAuth, async (req, res) => {
         date: record.date,
         level: record.level,
         message: record.message ?? null,
+        createdAt: record.created_at ?? null,
       })),
     })
   } catch (error) {
@@ -1380,6 +1383,8 @@ app.delete('/api/goals/:goalId/records/:recordId', requireAuth, async (req, res)
   }
 })
 
-app.listen(port, '127.0.0.1', () => {
-  console.log(`API server listening on http://127.0.0.1:${port}`)
+const host = process.env.API_HOST || '0.0.0.0'
+
+app.listen(port, host, () => {
+  console.log(`API server listening on http://${host}:${port}`)
 })

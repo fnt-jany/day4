@@ -16,3 +16,6 @@ coverage/
 
 # mobile
 .expo/
+
+# local runtime logs
+.logs/
