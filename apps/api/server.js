@@ -16,6 +16,21 @@ const corsAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://day4.fn
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
+
+const isLocalDevOrigin = (origin) => {
+  if (typeof origin !== 'string') {
+    return false
+  }
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+    || /^https?:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(origin)
+    || /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(origin)
+    || /^https?:\/\/(172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(origin)
+}
+
+const isAllowedOrigin = (origin) => {
+  return corsAllowedOrigins.includes(origin) || isLocalDevOrigin(origin)
+}
 const googleClient = new OAuth2Client(googleClientId)
 const MAX_GOALS_PER_USER = 10
 const MAX_RECORDS_PER_GOAL = 100
@@ -37,7 +52,7 @@ app.use(cors({
       return
     }
 
-    if (corsAllowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true)
       return
     }
@@ -458,6 +473,22 @@ async function getLanguage(userId) {
 
   const value = data?.value
   return value === 'en' ? 'en' : 'ko'
+}
+
+async function getThemeId(userId) {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('value')
+    .eq('user_id', userId)
+    .eq('key', 'theme_id')
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  const value = data?.value
+  return typeof value === 'string' && value.trim() ? value.trim() : 'day4-light'
 }
 
 const ensureOwnedGoal = async (goalId, userId) => {
@@ -1029,11 +1060,12 @@ app.delete('/api/chatbot/records/:recordId', requireChatbotAuth, async (req, res
 
 app.get('/api/settings', requireAuth, async (req, res) => {
   try {
-    const [chartSpacingMode, language] = await Promise.all([
+    const [chartSpacingMode, language, themeId] = await Promise.all([
       getChartSpacingMode(req.userId),
       getLanguage(req.userId),
+      getThemeId(req.userId),
     ])
-    res.json({ chartSpacingMode, language })
+    res.json({ chartSpacingMode, language, themeId })
   } catch (error) {
     console.error('settings read failed', error)
     res.status(500).json({ message: 'failed to read settings' })
@@ -1043,10 +1075,12 @@ app.get('/api/settings', requireAuth, async (req, res) => {
 app.put('/api/settings', requireAuth, async (req, res) => {
   const chartSpacingMode = req.body?.chartSpacingMode
   const language = req.body?.language
+  const themeId = typeof req.body?.themeId === 'string' ? req.body.themeId.trim() : ''
   const hasSpacingMode = chartSpacingMode === 'equal' || chartSpacingMode === 'actual'
   const hasLanguage = language === 'ko' || language === 'en'
+  const hasThemeId = /^[a-z0-9][a-z0-9-_]*$/i.test(themeId)
 
-  if (!hasSpacingMode && !hasLanguage) {
+  if (!hasSpacingMode && !hasLanguage && !hasThemeId) {
     res.status(400).json({ message: 'invalid payload' })
     return
   }
@@ -1074,6 +1108,22 @@ app.put('/api/settings', requireAuth, async (req, res) => {
           user_id: req.userId,
           key: 'language',
           value: language,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,key' },
+      )
+
+      if (error) {
+        throw error
+      }
+    }
+
+    if (hasThemeId) {
+      const { error } = await supabase.from('user_settings').upsert(
+        {
+          user_id: req.userId,
+          key: 'theme_id',
+          value: themeId,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,key' },
@@ -1388,3 +1438,5 @@ const host = process.env.API_HOST || '0.0.0.0'
 app.listen(port, host, () => {
   console.log(`API server listening on http://${host}:${port}`)
 })
+
+

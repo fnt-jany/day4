@@ -398,6 +398,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isGoogleReady, setIsGoogleReady] = useState(false)
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [loginLanguage, setLoginLanguage] = useState<'ko' | 'en'>('ko')
   const [guideRoute, setGuideRoute] = useState<GuideRoute>(getGuideRoute())
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
@@ -408,6 +409,7 @@ function App() {
       loginTitle: 'Google \uB85C\uADF8\uC778',
       loginDescription: '\uAD6C\uAE00 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD558\uBA74 \uB0B4 \uBAA9\uD45C/\uC124\uC815\uC774 \uBD84\uB9AC\uB418\uC5B4 \uAD00\uB9AC\uB429\uB2C8\uB2E4.',
       loginButtonHint: '\uB85C\uADF8\uC778 \uBC84\uD2BC\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...',
+      signingIn: '\uB85C\uADF8\uC778 \uC911\uC785\uB2C8\uB2E4...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.',
       missingGoogleScript: 'Google \uB85C\uADF8\uC778 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
       googleScriptLoadFailed: 'Google \uB85C\uADF8\uC778 \uC2A4\uD06C\uB9BD\uD2B8 \uB85C\uB529\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
@@ -428,6 +430,7 @@ function App() {
       loginTitle: 'Google Login',
       loginDescription: 'Sign in with Google to keep goals/settings separate per user.',
       loginButtonHint: 'Loading sign-in button...',
+      signingIn: 'Signing in...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID is not configured.',
       missingGoogleScript: 'Google sign-in script tag is missing.',
       googleScriptLoadFailed: 'Failed to load Google sign-in script.',
@@ -464,6 +467,7 @@ function App() {
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     try {
+      setIsAuthenticating(true)
       setErrorMessage(null)
       const result = await requestApi<AuthGoogleResponse>('/auth/google', {
         method: 'POST',
@@ -473,11 +477,14 @@ function App() {
       setUser(result.user)
     } catch {
       setErrorMessage(text.loginFailed)
+    } finally {
+      setIsAuthenticating(false)
     }
   }, [text.loginFailed])
 
   const handleGuestLogin = useCallback(async () => {
     try {
+      setIsAuthenticating(true)
       setErrorMessage(null)
       const result = await requestApi<AuthGuestResponse>('/auth/guest', {
         method: 'POST',
@@ -486,6 +493,8 @@ function App() {
       setUser(result.user)
     } catch {
       setErrorMessage(text.guestLoginFailed)
+    } finally {
+      setIsAuthenticating(false)
     }
   }, [text.guestLoginFailed])
 
@@ -653,7 +662,7 @@ function App() {
               </label>
             </div>
 
-            <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
+            <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()} disabled={isAuthenticating}>
               {text.guestLogin}
             </button>
             <p className="guide-link-wrap">
@@ -688,9 +697,10 @@ function App() {
             </label>
           </div>
 
-          {GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
+          {!isAuthenticating && GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
           {!GOOGLE_CLIENT_ID ? <p className="error-text">{text.missingGoogleClientId}</p> : null}
-          {GOOGLE_CLIENT_ID && !isGoogleReady ? <p className="empty">{text.loginButtonHint}</p> : null}
+          {isAuthenticating ? <p className="empty">{text.signingIn}</p> : null}
+          {GOOGLE_CLIENT_ID && !isGoogleReady && !isAuthenticating ? <p className="empty">{text.loginButtonHint}</p> : null}
           <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
             {text.guestLogin}
           </button>

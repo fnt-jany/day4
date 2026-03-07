@@ -1,9 +1,9 @@
 :root {
-  font-family: 'Segoe UI', 'Noto Sans KR', Arial, sans-serif;
+  font-family: 'Pretendard Variable', Pretendard, Inter, 'Segoe UI', 'Noto Sans KR', Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #13203a;
-  background: #eef3fb;
+  color: var(--text-primary, #13203a);
+  background: var(--bg-page, #eef3fb);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -21,15 +21,22 @@ body {
 
 button {
   border-radius: 8px;
-  border: 1px solid #b8c2d6;
+  border: 1px solid var(--secondary-border, #b8c2d6);
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
-  background-color: #fff;
+  background-color: var(--surface, #fff);
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 button:hover {
   opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+button:active {
+  transform: translateY(0);
 }

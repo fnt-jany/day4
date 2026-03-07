@@ -1,6 +1,7 @@
 ﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, DragEvent, FormEvent, TouchEvent } from 'react'
 import './App.css'
+import { THEMES, DEFAULT_THEME_ID, applyThemeById, normalizeThemeId } from './themes'
 
 type GoalInput = {
   id: number
@@ -68,6 +69,7 @@ type ChartPoint = GoalInput & {
 type SettingsResponse = {
   chartSpacingMode: ChartSpacingMode
   language: Language
+  themeId?: string
 }
 
 type ChatbotApiKeyStatusResponse = {
@@ -86,19 +88,20 @@ type ChatbotApiKeyIssueResponse = {
 
 const TEXT = {
   ko: {
-    appTitle: '작심사일',
-    settings: '설정',
-    chatbotGuide: '챗봇 연동 가이드',
-    mcpGuide: 'MCP 연동 가이드',
-    addGoal: '목표 추가',
-    chartSpacingLabel: '그래프 X축 간격',
-    equalSpacing: '등간격',
-    actualSpacing: '실제간격',
-    languageLabel: '언어',
-    korean: '한국어',
-    english: '영어',
-    logout: '로그아웃',
-    chatbotApiKeyTitle: '챗봇 API 키',
+    appTitle: '\uC791\uC2EC\uC0AC\uC77C',
+    settings: '\uC124\uC815',
+    chatbotGuide: '\uCC57\uBD07 \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+    mcpGuide: 'MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+    addGoal: '\uBAA9\uD45C \uCD94\uAC00',
+    chartSpacingLabel: '\uADF8\uB798\uD504 X\uCD95 \uAC04\uACA9',
+    equalSpacing: '\uB4F1\uAC04\uACA9',
+    actualSpacing: '\uC2E4\uC81C\uAC04\uACA9',
+    languageLabel: '\uC5B8\uC5B4',
+    korean: '\uD55C\uAD6D\uC5B4',
+    english: '\uC601\uC5B4',
+    themeLabel: '\uD14C\uB9C8',
+    logout: '\uB85C\uADF8\uC544\uC6C3',
+    chatbotApiKeyTitle: '\uCC57\uBD07 API \uD0A4',
     chatbotApiKeyDesc: '외부 챗봇에서 상태 입력 시 사용할 사용자 전용 키입니다.',
     chatbotApiKeyIssue: '키 발급/재발급',
     chatbotApiKeyCopy: '키 복사',
@@ -200,6 +203,7 @@ const TEXT = {
     languageLabel: 'Language',
     korean: 'Korean',
     english: 'English',
+    themeLabel: 'Theme',
     loading: 'Loading...',
     goalEdit: 'Edit Goal',
     goalCreate: 'Create Goal',
@@ -553,7 +557,14 @@ function MiniTrendChart({ records, targetLevel, spacingMode, emptyLabel, ariaLab
   })
 
   const targetY = toY(targetLevel)
+  const isDecreasing = sorted.length > 0 && sorted[0].level > targetLevel
   const path = points.map((point) => `${point.x},${point.y}`).join(' ')
+  const areaPath = points.length > 1
+    ? isDecreasing
+      ? `M ${points[0].x} 0 ` + points.map((p) => `L ${p.x} ${p.y}`).join(' ') + ` L ${points[points.length - 1].x} 0 Z`
+      : `M ${points[0].x} ${height} ` + points.map((p) => `L ${p.x} ${p.y}`).join(' ') + ` L ${points[points.length - 1].x} ${height} Z`
+    : ''
+
   const trendLine = getTrendLine(
     xPositions,
     sorted.map((record) => record.level),
@@ -563,29 +574,36 @@ function MiniTrendChart({ records, targetLevel, spacingMode, emptyLabel, ariaLab
   return (
     <div className="mini-chart-wrap">
       <svg viewBox={`0 0 ${width} ${height}`} className="mini-chart" aria-label={ariaLabel}>
+        <defs>
+          <linearGradient id={`mini-area-gradient-${targetLevel}`} x1="0" y1={isDecreasing ? "1" : "0"} x2="0" y2={isDecreasing ? "0" : "1"}>
+            <stop offset="0%" stopColor="var(--chart-record)" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="var(--chart-record)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
         <line
           x1={paddingX}
           y1={targetY}
           x2={width - paddingX}
           y2={targetY}
-          stroke="#d64545"
+          stroke="var(--chart-target)"
           strokeWidth="1.5"
           strokeDasharray="4 4"
         />
+        {areaPath ? <path d={areaPath} fill={`url(#mini-area-gradient-${targetLevel})`} /> : null}
         {trendLine ? (
           <line
             x1={trendLine.x1}
             y1={trendLine.y1}
             x2={trendLine.x2}
             y2={trendLine.y2}
-            stroke="#2f9e44"
+            stroke="var(--chart-trend)"
             strokeWidth="1.5"
             strokeDasharray="4 4"
           />
         ) : null}
-        {points.length > 1 ? <polyline fill="none" stroke="#175cd3" strokeWidth="2" points={path} /> : null}
+        {points.length > 1 ? <polyline fill="none" stroke="var(--chart-record)" strokeWidth="2" points={path} /> : null}
         {points.map((point, index) => (
-          <circle key={index} cx={point.x} cy={point.y} r="2.5" fill="#175cd3" />
+          <circle key={index} cx={point.x} cy={point.y} r="2.5" fill="var(--chart-record)" />
         ))}
       </svg>
     </div>
@@ -632,7 +650,19 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
     return { ...record, x, y }
   })
 
+  const isDecreasing = records.length > 0 && records[0].level > targetLevel
+
   const polyline = points.map((point) => `${point.x},${point.y}`).join(' ')
+  const areaPath = points.length > 1
+    ? isDecreasing
+      ? `M ${points[0].x} ${paddingTop} ` +
+        points.map((p) => `L ${p.x} ${p.y}`).join(' ') +
+        ` L ${points[points.length - 1].x} ${paddingTop} Z`
+      : `M ${points[0].x} ${height - paddingBottom} ` +
+        points.map((p) => `L ${p.x} ${p.y}`).join(' ') +
+        ` L ${points[points.length - 1].x} ${height - paddingBottom} Z`
+    : ''
+
   const targetY = toY(targetLevel)
   const trendLine = getTrendLine(
     xPositions,
@@ -678,10 +708,16 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
         aria-label={text.progressChartAria}
         onPointerDown={() => setPinnedPoint(null)}
       >
+        <defs>
+          <linearGradient id="chart-area-gradient" x1="0" y1={isDecreasing ? "1" : "0"} x2="0" y2={isDecreasing ? "0" : "1"}>
+            <stop offset="0%" stopColor="var(--chart-record)" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="var(--chart-record)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
         {yTicks.map((tick) => (
           <g key={tick.y}>
-            <line x1={paddingLeft} y1={tick.y} x2={width - paddingRight} y2={tick.y} stroke="#edf1f7" />
-            <text x={8} y={tick.y + 4} fontSize="11" fill="#5f6c89">
+            <line x1={paddingLeft} y1={tick.y} x2={width - paddingRight} y2={tick.y} stroke="var(--chart-grid)" />
+            <text x={8} y={tick.y + 4} fontSize="11" fill="var(--text-subtle)">
               {tick.label}
             </text>
           </g>
@@ -692,7 +728,7 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
           y1={paddingTop}
           x2={paddingLeft}
           y2={height - paddingBottom}
-          stroke="#9eabc6"
+          stroke="var(--chart-axis)"
           strokeWidth="1.5"
         />
         <line
@@ -700,16 +736,18 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
           y1={height - paddingBottom}
           x2={width - paddingRight}
           y2={height - paddingBottom}
-          stroke="#9eabc6"
+          stroke="var(--chart-axis)"
           strokeWidth="1.5"
         />
+
+        {areaPath ? <path d={areaPath} fill="url(#chart-area-gradient)" /> : null}
 
         <line
           x1={paddingLeft}
           y1={targetY}
           x2={width - paddingRight}
           y2={targetY}
-          stroke="#d64545"
+          stroke="var(--chart-target)"
           strokeWidth="2"
           strokeDasharray="5 5"
         />
@@ -720,12 +758,12 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
             y1={trendLine.y1}
             x2={trendLine.x2}
             y2={trendLine.y2}
-            stroke="#2f9e44"
+            stroke="var(--chart-trend)"
             strokeWidth="2"
             strokeDasharray="6 4"
           />
         ) : null}
-        {points.length > 1 ? <polyline fill="none" stroke="#175cd3" strokeWidth="3" points={polyline} /> : null}
+        {points.length > 1 ? <polyline fill="none" stroke="var(--chart-record)" strokeWidth="3" points={polyline} /> : null}
 
         {points.map((point) => (
           <g key={point.id}>
@@ -741,19 +779,19 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
                 setPinnedPoint((prev) => (prev?.id === point.id ? null : point))
               }}
             />
-            <circle cx={point.x} cy={point.y} r="5" fill="#175cd3" pointerEvents="none" />
+            <circle cx={point.x} cy={point.y} r="5" fill="var(--chart-record)" pointerEvents="none" />
             <line
               x1={point.x}
               y1={height - paddingBottom}
               x2={point.x}
               y2={height - paddingBottom + 5}
-              stroke="#9eabc6"
+              stroke="var(--chart-axis)"
             />
           </g>
         ))}
 
         {points.map((point) => (
-          <text key={`label-${point.id}`} x={point.x} y={height - 8} fontSize="10" textAnchor="middle" fill="#5f6c89">
+          <text key={`label-${point.id}`} x={point.x} y={height - 8} fontSize="10" textAnchor="middle" fill="var(--text-subtle)">
             {point.date.slice(5)}
           </text>
         ))}
@@ -766,9 +804,9 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
               width={tooltipWidth}
               height={tooltipHeight}
               rx="8"
-              fill="#0f1726"
+              fill="var(--text-primary)"
               fillOpacity="0.92"
-              stroke="#2d3954"
+              stroke="var(--text-strong)"
             />
             {tooltipLines.map((line, index) => (
               <text
@@ -776,7 +814,7 @@ function TrendChart({ records, targetLevel, unit, spacingMode, text }: TrendChar
                 x={tooltipX + 10}
                 y={tooltipY + 22 + index * 18}
                 fontSize="12"
-                fill="#f7f9ff"
+                fill="var(--surface)"
               >
                 {line}
               </text>
@@ -834,6 +872,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chartSpacingMode, setChartSpacingMode] = useState<ChartSpacingMode>('equal')
   const [language, setLanguage] = useState<Language>('ko')
+  const [themeId, setThemeId] = useState<string>(DEFAULT_THEME_ID)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [chatbotKeyPrefix, setChatbotKeyPrefix] = useState<string | null>(null)
   const [chatbotKeyIssuedAt, setChatbotKeyIssuedAt] = useState<string | null>(null)
@@ -903,6 +942,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       if (result.language === 'ko' || result.language === 'en') {
         setLanguage(result.language)
       }
+      setThemeId(normalizeThemeId(result.themeId))
     } catch {
       setErrorMessage(TEXT[language].errors.loadSettings)
     }
@@ -940,6 +980,20 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       setLanguage(nextLanguage)
     } catch {
       setErrorMessage(TEXT[nextLanguage].errors.saveSettings)
+    }
+  }
+
+  const updateTheme = async (nextThemeId: string) => {
+    const normalizedThemeId = normalizeThemeId(nextThemeId)
+    setThemeId(normalizedThemeId)
+
+    try {
+      await requestApi('/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ themeId: normalizedThemeId }),
+      })
+    } catch {
+      setErrorMessage(TEXT[language].errors.saveSettings)
     }
   }
 
@@ -1011,6 +1065,10 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   useEffect(() => {
     document.title = text.appTitle
   }, [text.appTitle])
+
+  useEffect(() => {
+    applyThemeById(themeId)
+  }, [themeId])
 
   useEffect(() => {
     return () => {
@@ -1553,6 +1611,20 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
               English
             </label>
           </div>
+          <div className="settings-row">
+            <span>{text.themeLabel}</span>
+            {THEMES.map((theme) => (
+              <label key={theme.id} className="settings-option">
+                <input
+                  type="radio"
+                  name="theme"
+                  checked={themeId === theme.id}
+                  onChange={() => void updateTheme(theme.id)}
+                />
+                {language === 'ko' ? theme.label.ko : theme.label.en}
+              </label>
+            ))}
+          </div>
           <div className="chatbot-key-panel">
             <h3>{text.chatbotApiKeyTitle}</h3>
             <p className="empty">{text.chatbotApiKeyDesc}</p>
@@ -1674,6 +1746,17 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                             className={`goal-trend-badge ${trendAssessment.status === "on_track" ? "on-track" : "off-track"}`}
                             title={`${text.goalTrendProjected}: ${trendAssessment.projectedLevel?.toFixed(1)} ${goal.unit} / ${goal.targetLevel} ${goal.unit}`}
                           >
+                            {trendAssessment.status === 'on_track' ? (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
+                                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                <polyline points="17 6 23 6 23 12"></polyline>
+                              </svg>
+                            ) : (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
+                                <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+                                <polyline points="17 18 23 18 23 12"></polyline>
+                              </svg>
+                            )}
                             {(trendAssessment.status === 'on_track' ? text.goalTrendOnTrack : text.goalTrendOffTrack) +
                               ` | ${text.goalTrendProjected} ${trendAssessment.projectedLevel?.toFixed(1)} ${goal.unit}`}
                           </span>
@@ -1954,6 +2037,9 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 }
 
 export default App
+
+
+
 
 
 
