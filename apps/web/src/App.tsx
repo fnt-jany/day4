@@ -631,9 +631,10 @@ function App() {
   if (isLoading) {
     return (
       <main className="auth-page">
-        <section className="auth-card">
+        <section className="auth-card auth-card-loading">
+          <p className="auth-eyebrow">Day4</p>
           <h1>{text.appTitle}</h1>
-          <p className="empty">{text.loading}</p>
+          <p className="empty auth-description">{text.loading}</p>
         </section>
       </main>
     )
@@ -646,10 +647,11 @@ function App() {
     if (isGuestPage) {
       return (
         <main className="auth-page">
-          <section className="auth-card">
+          <section className="auth-card auth-card-guest">
+            <p className="auth-eyebrow">Guest</p>
             <h1>{text.appTitle}</h1>
             <h2>{text.guestPageTitle}</h2>
-            <p>{text.guestPageDescription}</p>
+            <p className="auth-description">{text.guestPageDescription}</p>
 
             <div className="settings-row auth-lang-row">
               <label className="settings-option">
@@ -662,10 +664,12 @@ function App() {
               </label>
             </div>
 
-            <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()} disabled={isAuthenticating}>
+            <div className="auth-actions">
+              <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()} disabled={isAuthenticating}>
               {text.guestLogin}
-            </button>
-            <p className="guide-link-wrap">
+              </button>
+            </div>
+            <p className="guide-link-wrap auth-links">
               <a href="/">{text.backToMainLogin}</a>
             </p>
             <p className="guide-link-wrap">
@@ -681,10 +685,11 @@ function App() {
 
     return (
       <main className="auth-page">
-        <section className="auth-card">
+        <section className="auth-card auth-card-login">
+          <p className="auth-eyebrow">Personal Goal OS</p>
           <h1>{text.appTitle}</h1>
           <h2>{text.loginTitle}</h2>
-          <p>{text.loginDescription}</p>
+          <p className="auth-description">{text.loginDescription}</p>
 
           <div className="settings-row auth-lang-row">
             <label className="settings-option">
@@ -697,14 +702,16 @@ function App() {
             </label>
           </div>
 
-          {!isAuthenticating && GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
-          {!GOOGLE_CLIENT_ID ? <p className="error-text">{text.missingGoogleClientId}</p> : null}
-          {isAuthenticating ? <p className="empty">{text.signingIn}</p> : null}
-          {GOOGLE_CLIENT_ID && !isGoogleReady && !isAuthenticating ? <p className="empty">{text.loginButtonHint}</p> : null}
-          <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
-            {text.guestLogin}
-          </button>
-          <p className="guide-link-wrap">
+          <div className="auth-actions auth-actions-stacked">
+            {!isAuthenticating && GOOGLE_CLIENT_ID ? <div ref={googleButtonRef} className="google-button-slot" /> : null}
+            {!GOOGLE_CLIENT_ID ? <p className="error-text">{text.missingGoogleClientId}</p> : null}
+            {isAuthenticating ? <p className="empty auth-status">{text.signingIn}</p> : null}
+            {GOOGLE_CLIENT_ID && !isGoogleReady && !isAuthenticating ? <p className="empty auth-status">{text.loginButtonHint}</p> : null}
+            <button type="button" className="secondary guest-login-button" onClick={() => void handleGuestLogin()}>
+              {text.guestLogin}
+            </button>
+          </div>
+          <p className="guide-link-wrap auth-links">
             <a href={CHATBOT_GUIDE_HASH}>{text.chatbotGuide}</a>
             {' | '}
             <a href={MCP_GUIDE_HASH}>{text.mcpGuide}</a>

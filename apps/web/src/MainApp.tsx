@@ -1567,10 +1567,10 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       </header>
 
       {settingsOpen ? (
-        <section className="panel" aria-label="settings-panel">
+        <section className="panel settings-panel" aria-label="settings-panel">
           <h2>{text.settings}</h2>
           <div className="settings-row">
-            <span>{text.chartSpacingLabel}</span>
+            <span className="settings-row-label">{text.chartSpacingLabel}</span>
             <label className="settings-option">
               <input
                 type="radio"
@@ -1591,7 +1591,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
             </label>
           </div>
           <div className="settings-row">
-            <span>{text.languageLabel}</span>
+            <span className="settings-row-label">{text.languageLabel}</span>
             <label className="settings-option">
               <input
                 type="radio"
@@ -1612,7 +1612,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
             </label>
           </div>
           <div className="settings-row">
-            <span>{text.themeLabel}</span>
+            <span className="settings-row-label">{text.themeLabel}</span>
             {THEMES.map((theme) => (
               <label key={theme.id} className="settings-option">
                 <input
@@ -1628,8 +1628,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
           <div className="chatbot-key-panel">
             <h3>{text.chatbotApiKeyTitle}</h3>
             <p className="empty">{text.chatbotApiKeyDesc}</p>
-            <p>{text.chatbotApiKeyActivePrefix}: {chatbotKeyPrefix ?? text.chatbotApiKeyMissing}</p>
-            <p>{text.chatbotApiKeyIssuedAt}: {chatbotKeyIssuedAt ?? '-'}</p>
+            <p className="chatbot-key-meta"><span>{text.chatbotApiKeyActivePrefix}</span><strong>{chatbotKeyPrefix ?? text.chatbotApiKeyMissing}</strong></p>
+            <p className="chatbot-key-meta"><span>{text.chatbotApiKeyIssuedAt}</span><strong>{chatbotKeyIssuedAt ?? '-'}</strong></p>
             <div className="actions">
               <button type="button" className="primary" onClick={() => void issueChatbotApiKey()} disabled={isIssuingChatbotKey}>
                 {text.chatbotApiKeyIssue}
@@ -1733,14 +1733,14 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                   id={`goal-${goal.id}`}
                   key={goal.id}
                   data-goal-id={goal.id}
-                  className={`goal-item${draggingGoalId === goal.id ? ' goal-item-dragging' : ''}`}
+                  className={`goal-item${draggingGoalId === goal.id ? ' goal-item-dragging' : ''}${trendAssessment.status === 'on_track' ? ' goal-item-on-track' : ''}${trendAssessment.status === 'off_track' ? ' goal-item-off-track' : ''}`}
                   onDragOver={handleGoalDragOver}
                   onDrop={() => void handleGoalDrop(goal.id)}
                 >
                   <div className="goal-top">
                     <div className="goal-meta">
                       <div className="goal-title-row">
-                        <strong>{goal.name}</strong>
+                        <strong className="goal-name">{goal.name}</strong>
                         {trendAssessment.status !== 'insufficient' ? (
                           <span
                             className={`goal-trend-badge ${trendAssessment.status === "on_track" ? "on-track" : "off-track"}`}
@@ -1765,13 +1765,16 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
                       <div className="goal-summary">
                         <p className="goal-summary-line">
-                          {text.goalPrefix} {goal.targetLevel} {goal.unit} ({goal.targetDate})
+                          <span className="goal-summary-label">{text.goalPrefix}</span>
+                          <span className="goal-summary-value">{goal.targetLevel} {goal.unit} ({goal.targetDate})</span>
                         </p>
                         <p className="goal-summary-line">
-                          {text.latestInput}{' '}
-                          {latestInput
-                            ? latestInput.level + ' ' + goal.unit + ' (' + latestInput.date + ')'
-                            : text.none}
+                          <span className="goal-summary-label">{text.latestInput}</span>
+                          <span className="goal-summary-value">
+                            {latestInput
+                              ? latestInput.level + ' ' + goal.unit + ' (' + latestInput.date + ')'
+                              : text.none}
+                          </span>
                         </p>
                       </div>
 
@@ -1808,13 +1811,13 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                       >
                         ☰
                       </button>
-                      <button type="button" className="primary" onClick={() => openInputForm(goal)}>
+                      <button type="button" className="primary goal-action-button goal-action-input" onClick={() => openInputForm(goal)}>
                         {text.enterStatus}
                       </button>
-                      <button type="button" onClick={() => openRecordView(goal.id)}>
+                      <button type="button" className="goal-action-button goal-action-records" onClick={() => openRecordView(goal.id)}>
                         {text.viewRecords}
                       </button>
-                      <button type="button" onClick={() => openEditGoalForm(goal)}>
+                      <button type="button" className="goal-action-button goal-action-edit" onClick={() => openEditGoalForm(goal)}>
                         {text.edit}
                       </button>
                     </div>
@@ -1964,10 +1967,10 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                                     {record.message ? <span className="record-message">{record.message}</span> : null}
                                   </div>
                                   <div className="record-actions">
-                                    <button type="button" onClick={() => openInputEditForm(goal.id, record)}>
+                                    <button type="button" className="record-action-button" onClick={() => openInputEditForm(goal.id, record)}>
                                       {text.edit}
                                     </button>
-                                    <button type="button" onClick={() => void handleDeleteRecord(goal.id, record.id)}>
+                                    <button type="button" className="record-action-button danger" onClick={() => void handleDeleteRecord(goal.id, record.id)}>
                                       {text.delete}
                                     </button>
                                   </div>
