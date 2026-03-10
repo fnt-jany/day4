@@ -1,5 +1,5 @@
 ﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, DragEvent, FormEvent, TouchEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import './App.css'
 import { THEMES, DEFAULT_THEME_ID, applyThemeById, normalizeThemeId } from './themes'
 
@@ -152,6 +152,9 @@ const TEXT = {
     viewRecords: '기록 보기',
     edit: '수정',
     reorderGoals: '순서 변경',
+    finishReorder: '완료',    moveTop: '맨 위',
+    moveUp: '위로',
+    moveDown: '아래로',    moveBottom: '맨 아래',
     noRecordsForChart: '기록이 없어 그래프를 표시할 수 없습니다.',
     miniNoRecords: '기록 없음',
     legendRecords: '파란선: 기록',
@@ -244,6 +247,11 @@ const TEXT = {
     viewRecords: 'View Records',
     edit: 'Edit',
     reorderGoals: 'Reorder goals',
+    finishReorder: 'Done',
+    moveTop: 'To top',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    moveBottom: 'To bottom',
     noRecordsForChart: 'No records available to render this chart.',
     miniNoRecords: 'No records',
     legendRecords: 'Blue line: records',
@@ -328,8 +336,6 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 const GOAL_LIMIT_API_MESSAGE = 'goal limit reached (10)'
 const RECORD_LIMIT_API_MESSAGE = 'record limit reached (100)'
-const GOAL_REORDER_LONG_PRESS_MS = 350
-const GOAL_REORDER_MOVE_CANCEL_PX = 10
 
 type ApiRequestError = Error & {
   status: number
@@ -868,7 +874,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const [editingInputId, setEditingInputId] = useState<number | null>(null)
 
   const [recordGoalId, setRecordGoalId] = useState<number | null>(null)
-  const [draggingGoalId, setDraggingGoalId] = useState<number | null>(null)
+  const [isReorderMode, setIsReorderMode] = useState(false)
+  const [isSavingGoalOrder, setIsSavingGoalOrder] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chartSpacingMode, setChartSpacingMode] = useState<ChartSpacingMode>('equal')
   const [language, setLanguage] = useState<Language>('ko')
@@ -881,12 +888,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const [isRevokingChatbotKey, setIsRevokingChatbotKey] = useState(false)
   const [chatbotKeyNotice, setChatbotKeyNotice] = useState<string | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
-  const goalReorderLongPressTimerRef = useRef<number | null>(null)
-  const goalReorderTouchIdRef = useRef<number | null>(null)
-  const goalReorderTouchStartRef = useRef<{ x: number; y: number } | null>(null)
-  const goalReorderSourceGoalIdRef = useRef<number | null>(null)
-  const goalReorderDropTargetRef = useRef<number | null>(null)
-  const goalReorderActiveRef = useRef(false)
+  const goalOrderSnapshotRef = useRef<number[] | null>(null)
 
   const text = TEXT[language]
   const profileInitial = profileName.trim().charAt(0).toUpperCase() || '?'
@@ -1070,11 +1072,6 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     applyThemeById(themeId)
   }, [themeId])
 
-  useEffect(() => {
-    return () => {
-      clearGoalTouchLongPress()
-    }
-  }, [])
 
   const scrollGoalIntoView = (goalId: number) => {
     window.requestAnimationFrame(() => {
@@ -1331,158 +1328,66 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     })
   }
 
-  const clearGoalTouchLongPress = () => {
-    if (goalReorderLongPressTimerRef.current !== null) {
-      window.clearTimeout(goalReorderLongPressTimerRef.current)
-      goalReorderLongPressTimerRef.current = null
-    }
+  const moveGoalInList = (goalId: number, direction: 'up' | 'down' | 'top' | 'bottom') => {
+    setGoals((currentGoals) => {
+      const currentIndex = currentGoals.findIndex((goal) => goal.id === goalId)
+      if (currentIndex < 0) {
+        return currentGoals
+      }
+
+      const targetIndex = direction === 'top'
+        ? 0
+        : direction === 'bottom'
+          ? currentGoals.length - 1
+          : direction === 'up'
+            ? currentIndex - 1
+            : currentIndex + 1
+      if (targetIndex < 0 || targetIndex >= currentGoals.length) {
+        return currentGoals
+      }
+
+      const nextGoals = [...currentGoals]
+      const [movedGoal] = nextGoals.splice(currentIndex, 1)
+      nextGoals.splice(targetIndex, 0, movedGoal)
+      return nextGoals
+    })
   }
 
-  const resetGoalTouchReorderState = () => {
-    clearGoalTouchLongPress()
-    goalReorderTouchIdRef.current = null
-    goalReorderTouchStartRef.current = null
-    goalReorderDropTargetRef.current = null
-    goalReorderSourceGoalIdRef.current = null
-    goalReorderActiveRef.current = false
-    setDraggingGoalId(null)
+  const startReorderMode = () => {
+    closeGoalForm()
+    closeInputForm()
+    setRecordGoalId(null)
+    setSettingsOpen(false)
+    setProfileMenuOpen(false)
+    goalOrderSnapshotRef.current = goals.map((goal) => goal.id)
+    setIsReorderMode(true)
   }
 
-  const reorderGoalsFromSourceToTarget = async (sourceGoalId: number, targetGoalId: number) => {
-    if (sourceGoalId === targetGoalId) {
-      return
+  const cancelReorderMode = () => {
+    const snapshot = goalOrderSnapshotRef.current
+    if (snapshot) {
+      setGoals((currentGoals) => snapshot
+        .map((goalId) => currentGoals.find((goal) => goal.id === goalId) ?? null)
+        .filter((goal): goal is Goal => goal !== null))
     }
+    setIsReorderMode(false)
+    goalOrderSnapshotRef.current = null
+  }
 
-    const sourceIndex = goals.findIndex((goal) => goal.id === sourceGoalId)
-    const targetIndex = goals.findIndex((goal) => goal.id === targetGoalId)
-
-    if (sourceIndex < 0 || targetIndex < 0) {
-      return
-    }
-
-    const previousGoals = goals
-    const reorderedGoals = [...goals]
-    const [movedGoal] = reorderedGoals.splice(sourceIndex, 1)
-    reorderedGoals.splice(targetIndex, 0, movedGoal)
-
-    setGoals(reorderedGoals)
-
+  const finishReorderMode = async () => {
+    setIsSavingGoalOrder(true)
     try {
-      await saveGoalOrder(reorderedGoals.map((goal) => goal.id))
+      await saveGoalOrder(goals.map((goal) => goal.id))
+      setIsReorderMode(false)
+      goalOrderSnapshotRef.current = null
     } catch (error) {
-      setGoals(previousGoals)
       const apiError = error as Partial<ApiRequestError>
       const detail = apiError.apiMessage ?? (typeof apiError.status === 'number' ? `HTTP ${apiError.status}` : null)
       setErrorMessage(detail ? `${text.errors.saveGoalOrder} (${detail})` : text.errors.saveGoalOrder)
       await loadGoals()
+    } finally {
+      setIsSavingGoalOrder(false)
     }
-  }
-
-  const handleGoalDragStart = (event: DragEvent<HTMLButtonElement>, goalId: number) => {
-    setDraggingGoalId(goalId)
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(goalId))
-  }
-
-  const handleGoalDragOver = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-  }
-
-  const handleGoalDrop = async (targetGoalId: number) => {
-    const sourceGoalId = draggingGoalId
-    setDraggingGoalId(null)
-
-    if (sourceGoalId === null) {
-      return
-    }
-
-    await reorderGoalsFromSourceToTarget(sourceGoalId, targetGoalId)
-  }
-
-  const handleGoalTouchStart = (event: TouchEvent<HTMLButtonElement>, goalId: number) => {
-    if (event.touches.length !== 1) {
-      return
-    }
-
-    const touch = event.touches[0]
-    clearGoalTouchLongPress()
-    goalReorderTouchIdRef.current = touch.identifier
-    goalReorderTouchStartRef.current = { x: touch.clientX, y: touch.clientY }
-    goalReorderSourceGoalIdRef.current = goalId
-    goalReorderDropTargetRef.current = goalId
-    goalReorderActiveRef.current = false
-
-    goalReorderLongPressTimerRef.current = window.setTimeout(() => {
-      goalReorderActiveRef.current = true
-      setDraggingGoalId(goalId)
-    }, GOAL_REORDER_LONG_PRESS_MS)
-  }
-
-  const handleGoalTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
-    const touchId = goalReorderTouchIdRef.current
-    if (touchId === null) {
-      return
-    }
-
-    const touch = Array.from(event.changedTouches).find((item) => item.identifier === touchId)
-    if (!touch) {
-      return
-    }
-
-    const start = goalReorderTouchStartRef.current
-    if (!goalReorderActiveRef.current && start) {
-      const movedX = Math.abs(touch.clientX - start.x)
-      const movedY = Math.abs(touch.clientY - start.y)
-      if (movedX > GOAL_REORDER_MOVE_CANCEL_PX || movedY > GOAL_REORDER_MOVE_CANCEL_PX) {
-        clearGoalTouchLongPress()
-      }
-      return
-    }
-
-    if (!goalReorderActiveRef.current) {
-      return
-    }
-
-    event.preventDefault()
-    const dropElement = document.elementFromPoint(touch.clientX, touch.clientY)
-    const goalItemElement = dropElement?.closest<HTMLElement>('[data-goal-id]')
-    if (!goalItemElement) {
-      return
-    }
-
-    const targetGoalId = Number(goalItemElement.dataset.goalId)
-    if (Number.isInteger(targetGoalId) && targetGoalId > 0) {
-      goalReorderDropTargetRef.current = targetGoalId
-    }
-  }
-
-  const handleGoalTouchEnd = async (event: TouchEvent<HTMLButtonElement>) => {
-    const touchId = goalReorderTouchIdRef.current
-    if (touchId === null) {
-      return
-    }
-
-    const touch = Array.from(event.changedTouches).find((item) => item.identifier === touchId)
-    if (!touch) {
-      return
-    }
-
-    const sourceGoalId = goalReorderSourceGoalIdRef.current
-    const targetGoalId = goalReorderDropTargetRef.current
-    const isActive = goalReorderActiveRef.current
-
-    resetGoalTouchReorderState()
-
-    if (!isActive || sourceGoalId === null || targetGoalId === null) {
-      return
-    }
-
-    await reorderGoalsFromSourceToTarget(sourceGoalId, targetGoalId)
-  }
-
-  const handleGoalTouchCancel = () => {
-    resetGoalTouchReorderState()
   }
 
   const openRecordView = (goalId: number) => {
@@ -1506,9 +1411,25 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
       <header className="page-header">
         <h1>{text.appTitle}</h1>
         <div className="header-actions">
-          <button type="button" className="primary" onClick={openCreateGoalForm}>
-            {text.addGoal}
-          </button>
+          {isReorderMode ? (
+            <>
+              <button type="button" onClick={cancelReorderMode} disabled={isSavingGoalOrder}>
+                {text.cancel}
+              </button>
+              <button type="button" className="primary" onClick={() => void finishReorderMode()} disabled={isSavingGoalOrder}>
+                {text.finishReorder}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="primary" onClick={openCreateGoalForm}>
+                {text.addGoal}
+              </button>
+              <button type="button" onClick={startReorderMode}>
+                {text.reorderGoals}
+              </button>
+            </>
+          )}
           <div className="profile-menu" ref={profileMenuRef}>
             <button
               type="button"
@@ -1568,7 +1489,10 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
 
       {settingsOpen ? (
         <section className="panel settings-panel" aria-label="settings-panel">
-          <h2>{text.settings}</h2>
+          <div className="settings-panel-header">
+            <h2>{text.settings}</h2>
+            <button type="button" onClick={() => setSettingsOpen(false)}>{text.close}</button>
+          </div>
           <div className="settings-row">
             <span className="settings-row-label">{text.chartSpacingLabel}</span>
             <label className="settings-option">
@@ -1724,7 +1648,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
           <p className="empty">{text.noGoalsYet}</p>
         ) : (
           <ul className="goal-list">
-            {goals.map((goal) => {
+            {goals.map((goal, index) => {
               const latestInput = getLatestRecord(goal.inputs)
               const trendAssessment = getGoalTrendAssessment(goal)
 
@@ -1733,14 +1657,13 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                   id={`goal-${goal.id}`}
                   key={goal.id}
                   data-goal-id={goal.id}
-                  className={`goal-item${draggingGoalId === goal.id ? ' goal-item-dragging' : ''}${trendAssessment.status === 'on_track' ? ' goal-item-on-track' : ''}${trendAssessment.status === 'off_track' ? ' goal-item-off-track' : ''}`}
-                  onDragOver={handleGoalDragOver}
-                  onDrop={() => void handleGoalDrop(goal.id)}
+                  className={`goal-item${trendAssessment.status === 'on_track' ? ' goal-item-on-track' : ''}${trendAssessment.status === 'off_track' ? ' goal-item-off-track' : ''}`}
                 >
                   <div className="goal-top">
                     <div className="goal-meta">
                       <div className="goal-title-row">
                         <strong className="goal-name">{goal.name}</strong>
+                        {isReorderMode ? <span className="goal-order-badge">#{index + 1}</span> : null}
                         {trendAssessment.status !== 'insufficient' ? (
                           <span
                             className={`goal-trend-badge ${trendAssessment.status === "on_track" ? "on-track" : "off-track"}`}
@@ -1795,33 +1718,46 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                       </button>
                     </div>
 
-                    <div className="goal-actions">
-                      <button
-                        type="button"
-                        className="goal-reorder-handle"
-                        draggable
-                        onDragStart={(event) => handleGoalDragStart(event, goal.id)}
-                        onDragEnd={() => setDraggingGoalId(null)}
-                        onTouchStart={(event) => handleGoalTouchStart(event, goal.id)}
-                        onTouchMove={handleGoalTouchMove}
-                        onTouchEnd={(event) => void handleGoalTouchEnd(event)}
-                        onTouchCancel={handleGoalTouchCancel}
-                        aria-label={text.reorderGoals}
-                        title={text.reorderGoals}
-                      >
-                        ☰
-                      </button>
-                      <button type="button" className="primary goal-action-button goal-action-input" onClick={() => openInputForm(goal)}>
-                        {text.enterStatus}
-                      </button>
-                      <button type="button" className="goal-action-button goal-action-records" onClick={() => openRecordView(goal.id)}>
-                        {text.viewRecords}
-                      </button>
-                      <button type="button" className="goal-action-button goal-action-edit" onClick={() => openEditGoalForm(goal)}>
-                        {text.edit}
-                      </button>
-                    </div>
-                  </div>
+                    <div className={`goal-actions${isReorderMode ? ' goal-actions-reorder' : ''}`}>
+                      {isReorderMode ? (
+                        <>
+                          <button type="button" className="goal-order-button" onClick={() => moveGoalInList(goal.id, 'top')} disabled={index === 0 || isSavingGoalOrder} aria-label={text.moveTop} title={text.moveTop}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="4 6.5 8 2.5 12 6.5" />
+                              <polyline points="4 12.5 8 8.5 12 12.5" />
+                            </svg>
+                          </button>
+                          <button type="button" className="goal-order-button" onClick={() => moveGoalInList(goal.id, 'up')} disabled={index === 0 || isSavingGoalOrder} aria-label={text.moveUp} title={text.moveUp}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="4 10.5 8 6.5 12 10.5" />
+                            </svg>
+                          </button>
+                          <button type="button" className="goal-order-button" onClick={() => moveGoalInList(goal.id, 'down')} disabled={index === goals.length - 1 || isSavingGoalOrder} aria-label={text.moveDown} title={text.moveDown}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="4 6.5 8 10.5 12 6.5" />
+                            </svg>
+                          </button>
+                          <button type="button" className="goal-order-button" onClick={() => moveGoalInList(goal.id, 'bottom')} disabled={index === goals.length - 1 || isSavingGoalOrder} aria-label={text.moveBottom} title={text.moveBottom}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="4 3.5 8 7.5 12 3.5" />
+                              <polyline points="4 9.5 8 13.5 12 9.5" />
+                            </svg>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" className="primary goal-action-button goal-action-input" onClick={() => openInputForm(goal)}>
+                            {text.enterStatus}
+                          </button>
+                          <button type="button" className="goal-action-button goal-action-records" onClick={() => openRecordView(goal.id)}>
+                            {text.viewRecords}
+                          </button>
+                          <button type="button" className="goal-action-button goal-action-edit" onClick={() => openEditGoalForm(goal)}>
+                            {text.edit}
+                          </button>
+                        </>
+                      )}
+                    </div>                  </div>
 
                   {editingGoalId === goal.id ? (
                     <section className="panel goal-detail-panel goal-edit-inline" aria-label="goal-edit-inline">

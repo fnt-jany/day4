@@ -1270,3 +1270,95 @@ button.danger {
     font-size: 10px;
   }
 }
+
+
+.record-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.record-message {
+  display: block;
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+
+.goal-actions-reorder {
+  justify-content: stretch;
+}
+
+.goal-actions-reorder .goal-reorder-handle {
+  flex: 0 0 auto;
+}
+
+.goal-order-button {
+  flex: 1 1 0;
+}
+
+
+.goal-order-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, white 90%);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, white 76%);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.goal-actions-reorder {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+
+.goal-order-button {
+  width: 100%;
+}
+
+
+.goal-actions-reorder {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.goal-order-button {
+  min-height: 34px;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 700px) {
+  .goal-actions-reorder {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .goal-order-button {
+    min-height: 32px;
+    padding: 5px 0;
+  }
+}
+
+
+.settings-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.settings-panel-header h2 {
+  margin-bottom: 0;
+}
