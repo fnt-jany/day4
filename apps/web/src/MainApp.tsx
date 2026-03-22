@@ -86,6 +86,66 @@ type ChatbotApiKeyIssueResponse = {
   warning: string
 }
 
+declare global {
+  interface Window {
+    adsbygoogle?: unknown[]
+  }
+}
+
+function GoalListAdCard() {
+  const adRef = useRef<HTMLModElement | null>(null)
+
+  useEffect(() => {
+    if (!adRef.current || !window.adsbygoogle) {
+      return
+    }
+
+    if (adRef.current.dataset.adLoaded === 'true') {
+      return
+    }
+
+    try {
+      ;(window.adsbygoogle = window.adsbygoogle || []).push({})
+      adRef.current.dataset.adLoaded = 'true'
+    } catch {
+      // Ignore AdSense push errors during local/dev rendering.
+    }
+  }, [])
+
+  return (
+    <li className="goal-ad-item" aria-hidden="true">
+      <div className="goal-ad-card">
+        <ins
+          ref={adRef}
+          className="adsbygoogle"
+          style={{ display: 'block', width: '100%', height: '220px' }}
+          data-ad-client="ca-pub-8815573688398796"
+          data-ad-slot="7011992520"
+        />
+      </div>
+    </li>
+  )
+}
+
+const getGoalAdInsertIndexes = (goals: Goal[]) => {
+  const indexes = new Set<number>()
+  if (goals.length < 3) {
+    return indexes
+  }
+
+  const seed = goals.reduce((acc, goal, index) => (acc + goal.id * (index + 11)) % 9973, 17)
+  let cursor = 1 + (seed % 2)
+  let stepSeed = seed
+
+  while (cursor < goals.length - 1) {
+    indexes.add(cursor)
+    stepSeed = (stepSeed * 1103515245 + 12345) & 0x7fffffff
+    cursor += 2 + (stepSeed % 2)
+  }
+
+  return indexes
+}
+
 const TEXT = {
   ko: {
     appTitle: '\uC791\uC2EC\uC0AC\uC77C',
@@ -919,6 +979,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     [goals, inputGoalId],
   )
 
+  const adInsertIndexes = useMemo(() => getGoalAdInsertIndexes(goals), [goals])
+
 
 
 
@@ -1653,7 +1715,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
               const trendAssessment = getGoalTrendAssessment(goal)
 
               return (
-                <li
+                <Fragment key={goal.id}>
+                  <li
                   id={`goal-${goal.id}`}
                   key={goal.id}
                   data-goal-id={goal.id}
@@ -1966,6 +2029,8 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                     </section>
                   ) : null}
                 </li>
+                  {adInsertIndexes.has(index) ? <GoalListAdCard /> : null}
+                </Fragment>
               )
             })}
           </ul>

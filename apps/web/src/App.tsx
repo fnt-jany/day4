@@ -61,10 +61,20 @@ const MCP_GUIDE_HASH = '#/mcp-guide'
 const GUEST_ROUTE_PATH = '/guest'
 
 type GuideRoute = 'none' | 'chatbot' | 'mcp'
+type PublicRoute = 'none' | 'about' | 'privacy' | 'terms' | 'contact'
 
 const getGuideRoute = (): GuideRoute => {
   if (window.location.hash === CHATBOT_GUIDE_HASH) return 'chatbot'
   if (window.location.hash === MCP_GUIDE_HASH) return 'mcp'
+  return 'none'
+}
+
+const getPublicRoute = (): PublicRoute => {
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
+  if (pathname === '/about') return 'about'
+  if (pathname === '/privacy') return 'privacy'
+  if (pathname === '/terms') return 'terms'
+  if (pathname === '/contact') return 'contact'
   return 'none'
 }
 
@@ -393,6 +403,111 @@ add_goal_records_batch
   )
 }
 
+
+function SiteFooterLinks() {
+  return (
+    <nav className="site-footer-links" aria-label="Site links">
+      <a href="/about">About</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/contact">Contact</a>
+    </nav>
+  )
+}
+
+function PublicInfoPage({ route }: { route: Exclude<PublicRoute, 'none'> }) {
+  const content = {
+    about: {
+      eyebrow: 'About Day4',
+      title: 'Day4',
+      summary: 'A simple goal tracking app for recording progress, reviewing trends, and keeping daily effort visible.',
+      sections: [
+        {
+          heading: 'What it does',
+          body: 'Day4 lets each user manage goals, record daily status, review charts, and keep settings separate by account.',
+        },
+        {
+          heading: 'How to use it',
+          body: 'Sign in with Google or enter guest mode, create goals, then keep adding records with date, level, and notes.',
+        },
+      ],
+    },
+    privacy: {
+      eyebrow: 'Privacy Policy',
+      title: 'Privacy',
+      summary: 'Day4 stores only the minimum account and goal data required to provide personal goal tracking, settings sync, and optional chatbot integrations.',
+      sections: [
+        {
+          heading: 'Data we collect',
+          body: 'Day4 stores account profile fields returned by login providers, user settings, goals, goal records, and chatbot API keys that are explicitly issued by the user.',
+        },
+        {
+          heading: 'Purpose of use',
+          body: 'This data is used to provide sign-in, separate user workspaces, charts, trend prediction, settings persistence, and user-authorized external integrations.',
+        },
+        {
+          heading: 'Data sharing and retention',
+          body: 'Day4 does not sell user data. Stored data remains in the service database until the operator removes it for maintenance purposes or the service structure changes.',
+        },
+      ],
+    },
+    terms: {
+      eyebrow: 'Terms of Use',
+      title: 'Terms',
+      summary: 'Day4 is provided as a personal goal management service. By using it, you agree not to misuse the app, the API, or issued access keys.',
+      sections: [
+        {
+          heading: 'Acceptable use',
+          body: 'Do not attempt unauthorized access, overload the service, bypass account boundaries, or use issued chatbot API keys for other users or systems without permission.',
+        },
+        {
+          heading: 'Availability and changes',
+          body: 'Features, UI, limits, integrations, and storage structure may change at any time as the product evolves. The service may also be temporarily unavailable for maintenance or debugging.',
+        },
+        {
+          heading: 'User responsibility',
+          body: 'Users are responsible for the accuracy of their own records and for keeping issued API keys private. Continued use after changes are published means those changes are accepted.',
+        },
+      ],
+    },
+    contact: {
+      eyebrow: 'Contact',
+      title: 'Contact',
+      summary: 'For product feedback, bug reports, or account questions, contact the operator by email.',
+      sections: [
+        {
+          heading: 'Email',
+          body: 'fnt.jany.ai@gmail.com',
+        },
+        {
+          heading: 'Scope',
+          body: 'Please include the page, action, and date of the issue so it can be reproduced quickly.',
+        },
+      ],
+    },
+  }[route]
+
+  return (
+    <main className="guide-page public-page">
+      <section className="guide-card public-card">
+        <p className="auth-eyebrow">{content.eyebrow}</p>
+        <h1>{content.title}</h1>
+        <p>{content.summary}</p>
+        {content.sections.map((section) => (
+          <section key={section.heading} className="public-section">
+            <h3>{section.heading}</h3>
+            <p>{section.body}</p>
+          </section>
+        ))}
+        <p className="guide-link-wrap">
+          <a href="/">Day4 Home</a>
+        </p>
+        <SiteFooterLinks />
+      </section>
+    </main>
+  )
+}
+
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -401,6 +516,7 @@ function App() {
   const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [loginLanguage, setLoginLanguage] = useState<'ko' | 'en'>('ko')
   const [guideRoute, setGuideRoute] = useState<GuideRoute>(getGuideRoute())
+  const publicRoute = getPublicRoute()
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
 
   const text = {
@@ -451,7 +567,17 @@ function App() {
   const loadMe = useCallback(async () => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY)
     if (!token) {
-      setIsLoading(false)
+      try {
+        const result = await requestApi<AuthGuestResponse>('/auth/guest', {
+          method: 'POST',
+        })
+        localStorage.setItem(AUTH_TOKEN_KEY, result.token)
+        setUser(result.user)
+      } catch {
+        setErrorMessage(text.guestLoginFailed)
+      } finally {
+        setIsLoading(false)
+      }
       return
     }
 
@@ -463,7 +589,7 @@ function App() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [text.guestLoginFailed])
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     try {
@@ -505,6 +631,11 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (publicRoute !== 'none') {
+      document.title = `Day4 - ${publicRoute.charAt(0).toUpperCase()}${publicRoute.slice(1)}`
+      return
+    }
+
     if (guideRoute !== 'none') {
       if (guideRoute === 'chatbot') {
         document.title = loginLanguage === 'ko'
@@ -519,10 +650,10 @@ function App() {
     }
 
     void loadMe()
-  }, [guideRoute, loadMe, loginLanguage])
+  }, [guideRoute, loadMe, loginLanguage, publicRoute])
 
   useEffect(() => {
-    if (guideRoute !== 'none' || user || !GOOGLE_CLIENT_ID) {
+    if (guideRoute !== 'none' || publicRoute !== 'none' || user || !GOOGLE_CLIENT_ID || isLoading) {
       return
     }
 
@@ -599,11 +730,13 @@ function App() {
     }
   }, [
     guideRoute,
+    publicRoute,
     handleGoogleCredential,
     text.googleInitFailed,
     text.googleInitTimeout,
     text.googleScriptLoadFailed,
     text.missingGoogleScript,
+    isLoading,
     user,
   ])
 
@@ -626,6 +759,10 @@ function App() {
 
   if (guideRoute === 'mcp') {
     return <McpGuidePage />
+  }
+
+  if (publicRoute !== 'none') {
+    return <PublicInfoPage route={publicRoute} />
   }
 
   if (isLoading) {
@@ -725,7 +862,14 @@ function App() {
   const activeUser = user ?? { id: 0, name: 'Guest' }
   const profileName = activeUser.name || activeUser.email || `user-${activeUser.id}`
 
-  return <MainApp profileName={profileName} onLogout={handleLogout} />
+  return (
+    <>
+      <MainApp profileName={profileName} onLogout={handleLogout} />
+      <footer className="site-footer-shell">
+        <SiteFooterLinks />
+      </footer>
+    </>
+  )
 }
 
 export default App
