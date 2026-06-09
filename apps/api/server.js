@@ -618,6 +618,20 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   res.json({ user: req.user })
 })
 
+app.get('/api/public/guest-preview', async (_req, res) => {
+  try {
+    const guestUser = await getOrCreateGuestUser()
+    const goals = await listGoals(guestUser.id)
+    res.json({
+      profileName: guestUser.name || 'Guest',
+      goals,
+    })
+  } catch (error) {
+    console.error('guest preview read failed', error)
+    res.status(500).json({ message: 'failed to read guest preview' })
+  }
+})
+
 app.get('/api/chatbot/api-key', requireAuth, async (req, res) => {
   try {
     const [keyHash, keyPrefix, issuedAt, apiKey] = await Promise.all([

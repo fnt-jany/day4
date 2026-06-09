@@ -1,5 +1,6 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import MainApp from './MainApp'
+import AdFitSlot from './AdFitSlot'
 import mcpSetupImage from './assets/mcp-chatgpt-setup.svg'
 
 type AuthUser = {
@@ -20,6 +21,27 @@ type AuthMeResponse = {
 type AuthGuestResponse = {
   token: string
   user: AuthUser
+}
+
+type PreviewGoalInput = {
+  id: number
+  date: string
+  level: number
+  message?: string
+}
+
+type PreviewGoal = {
+  id: number
+  name: string
+  targetDate: string
+  targetLevel: number
+  unit: string
+  inputs: PreviewGoalInput[]
+}
+
+type GuestPreviewResponse = {
+  profileName: string
+  goals: PreviewGoal[]
 }
 
 type GoogleCredentialResponse = {
@@ -56,6 +78,8 @@ declare global {
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? `http://${window.location.hostname}:8787/api`
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const AUTH_TOKEN_KEY = 'day4_auth_token'
+const CHATBOT_GUIDE_PATH = '/chatbot-guide'
+const MCP_GUIDE_PATH = '/mcp-guide'
 const CHATBOT_GUIDE_HASH = '#/chatbot-guide'
 const MCP_GUIDE_HASH = '#/mcp-guide'
 const GUEST_ROUTE_PATH = '/guest'
@@ -64,8 +88,9 @@ type GuideRoute = 'none' | 'chatbot' | 'mcp'
 type PublicRoute = 'none' | 'about' | 'privacy' | 'terms' | 'contact'
 
 const getGuideRoute = (): GuideRoute => {
-  if (window.location.hash === CHATBOT_GUIDE_HASH) return 'chatbot'
-  if (window.location.hash === MCP_GUIDE_HASH) return 'mcp'
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
+  if (pathname === CHATBOT_GUIDE_PATH || window.location.hash === CHATBOT_GUIDE_HASH) return 'chatbot'
+  if (pathname === MCP_GUIDE_PATH || window.location.hash === MCP_GUIDE_HASH) return 'mcp'
   return 'none'
 }
 
@@ -142,7 +167,7 @@ function ChatbotGuidePage() {
     },
   }[language]
 
-  const guideUrl = `${window.location.origin}/${CHATBOT_GUIDE_HASH}`
+  const guideUrl = `${window.location.origin}${CHATBOT_GUIDE_PATH}`
 
   return (
     <main className="guide-page">
@@ -189,7 +214,7 @@ function ChatbotGuidePage() {
         <p className="empty">{text.sampleTip}</p>
 
         <p>
-          <a href="#/">{text.home}</a>
+          <a href="/">{text.home}</a>
         </p>
       </section>
     </main>
@@ -202,27 +227,27 @@ function McpGuidePage() {
 
   const text = {
     ko: {
-      appTitle: '작심사일',
-      pageTitle: 'MCP 연동 가이드',
-      summary: 'ChatGPT MCP에서 Day4 상태를 입력하는 방법입니다. 현재 방식은 매 호출마다 apiKey 전달이 필요합니다.',
-      home: '로그인 화면으로',
+      appTitle: '\uC791\uC2EC\uC0AC\uC77C',
+      pageTitle: 'MCP \uC5F0\uB3D9 \uAC00\uC774\uB4DC',
+      summary: 'ChatGPT MCP\uC5D0\uC11C Day4 \uC0C1\uD0DC\uB97C \uC785\uB825\uD558\uB294 \uBC29\uBC95\uC785\uB2C8\uB2E4. \uD604\uC7AC \uBC29\uC2DD\uC740 \uB9E4 \uD638\uCD9C\uB9C8\uB2E4 apiKey \uC804\uB2EC\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.',
+      home: '\uB85C\uADF8\uC778 \uD654\uBA74\uC73C\uB85C',
       sectionUrl: 'MCP Server URL',
-      copyUrl: 'URL 복사',
-      copied: '복사되었습니다.',
-      copyFailed: '복사에 실패했습니다. 수동으로 복사해 주세요.',
-      sectionFlow: '연동 순서',
-      step1: '1) ChatGPT에 MCP 서버 URL 등록',
-      step2: '2) API 키(day4_ck_...)는 프로필 > 설정 > 챗봇 API 키에서 발급합니다.',
-      step2b: '3) list_goals 호출 시 발급한 apiKey를 포함합니다.',
-      step3: '4) list_goal_records / add_goal_record / update_goal_record / delete_goal_record / add_goal_records_batch 호출 시 apiKey와 목표/상태 값을 포함합니다.',
-      sectionChatgpt: 'ChatGPT 웹 설정 (개발자 모드)',
-      chatgptStep1: '1) ChatGPT 웹에서 우상단 프로필을 누릅니다.',
-      chatgptStep2: '2) 설정 → 앱 → 고급 설정 → 개발자 모드 → 앱 만들기 메뉴로 이동합니다.',
-      chatgptStep3: '3) MCP URL에 https://day4-mcp.onrender.com/mcp 를 입력합니다.',
-      chatgptStep4: '4) 인증 방법은 제한없음(None)을 선택합니다.',
-      chatgptStep5: '5) 저장 후 list_goals, list_goal_records, add_goal_record, update_goal_record, delete_goal_record, add_goal_records_batch 도구가 보이는지 확인합니다.',
-      sectionImage: '설정 화면 안내 이미지',
-      sectionTools: '도구 입력 예시',
+      copyUrl: 'URL \uBCF5\uC0AC',
+      copied: '\uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.',
+      copyFailed: '\uBCF5\uC0AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC218\uB3D9\uC73C\uB85C \uBCF5\uC0AC\uD574 \uC8FC\uC138\uC694.',
+      sectionFlow: '\uC5F0\uB3D9 \uC21C\uC11C',
+      step1: '1) ChatGPT\uC5D0 MCP \uC11C\uBC84 URL \uB4F1\uB85D',
+      step2: '2) API \uD0A4(day4_ck_...)\uB294 \uD504\uB85C\uD544 > \uC124\uC815 > \uCC57\uBD07 API \uD0A4\uC5D0\uC11C \uBC1C\uAE09\uD569\uB2C8\uB2E4.',
+      step2b: '3) list_goals \uD638\uCD9C \uC2DC \uBC1C\uAE09\uD55C apiKey\uB97C \uD3EC\uD568\uD569\uB2C8\uB2E4.',
+      step3: '4) list_goal_records / add_goal_record / update_goal_record / delete_goal_record / add_goal_records_batch \uD638\uCD9C \uC2DC apiKey\uC640 \uBAA9\uD45C/\uC0C1\uD0DC \uAC12\uC744 \uD3EC\uD568\uD569\uB2C8\uB2E4.',
+      sectionChatgpt: 'ChatGPT \uC6F9 \uC124\uC815 (\uAC1C\uBC1C\uC790 \uBAA8\uB4DC)',
+      chatgptStep1: '1) ChatGPT \uC6F9\uC5D0\uC11C \uC6B0\uC0C1\uB2E8 \uD504\uB85C\uD544\uC744 \uB204\uB985\uB2C8\uB2E4.',
+      chatgptStep2: '2) \uC124\uC815 -> \uC571 -> \uACE0\uAE09 \uC124\uC815 -> \uAC1C\uBC1C\uC790 \uBAA8\uB4DC -> \uC571 \uB9CC\uB4E4\uAE30 \uBA54\uB274\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.',
+      chatgptStep3: '3) MCP URL\uC5D0 https://day4-mcp.onrender.com/mcp \uB97C \uC785\uB825\uD569\uB2C8\uB2E4.',
+      chatgptStep4: '4) \uC778\uC99D \uBC29\uBC95\uC740 \uC81C\uD55C\uC5C6\uC74C(None)\uC744 \uC120\uD0DD\uD569\uB2C8\uB2E4.',
+      chatgptStep5: '5) \uC800\uC7A5 \uD6C4 list_goals, list_goal_records, add_goal_record, update_goal_record, delete_goal_record, add_goal_records_batch \uB3C4\uAD6C\uAC00 \uBCF4\uC774\uB294\uC9C0 \uD655\uC778\uD569\uB2C8\uB2E4.',
+      sectionImage: '\uC124\uC815 \uD654\uBA74 \uC548\uB0B4 \uC774\uBBF8\uC9C0',
+      sectionTools: '\uB3C4\uAD6C \uC785\uB825 \uC608\uC2DC',
     },
     en: {
       appTitle: 'Day4',
@@ -296,7 +321,7 @@ function McpGuidePage() {
         <div className="settings-row auth-lang-row">
           <label className="settings-option">
             <input type="radio" name="mcp-guide-language" checked={language === 'ko'} onChange={() => setLanguage('ko')} />
-            {'한국어'}
+            {'\uD55C\uAD6D\uC5B4'}
           </label>
           <label className="settings-option">
             <input type="radio" name="mcp-guide-language" checked={language === 'en'} onChange={() => setLanguage('en')} />
@@ -335,7 +360,7 @@ function McpGuidePage() {
         <h3>{text.sectionImage}</h3>
         <img
           src={mcpSetupImage}
-          alt={language === 'ko' ? 'ChatGPT 웹 MCP 설정 경로 안내 이미지' : 'ChatGPT web MCP setup flow image'}
+          alt={language === 'ko' ? '\uCC57GPT \uC6F9 MCP \uC124\uC815 \uACBD\uB85C \uC548\uB0B4 \uC774\uBBF8\uC9C0' : 'ChatGPT web MCP setup flow image'}
           className="guide-image"
         />
 
@@ -396,7 +421,7 @@ add_goal_records_batch
 }`}</pre>
 
         <p>
-          <a href="#/">{text.home}</a>
+          <a href="/">{text.home}</a>
         </p>
       </section>
     </main>
@@ -514,6 +539,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const [isAuthenticating, setIsAuthenticating] = useState(false)
+  const [guestPreview, setGuestPreview] = useState<GuestPreviewResponse | null>(null)
   const [loginLanguage, setLoginLanguage] = useState<'ko' | 'en'>('ko')
   const [guideRoute, setGuideRoute] = useState<GuideRoute>(getGuideRoute())
   const publicRoute = getPublicRoute()
@@ -524,6 +550,18 @@ function App() {
       appTitle: '\uC791\uC2EC\uC0AC\uC77C',
       loginTitle: 'Google \uB85C\uADF8\uC778',
       loginDescription: '\uAD6C\uAE00 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD558\uBA74 \uB0B4 \uBAA9\uD45C/\uC124\uC815\uC774 \uBD84\uB9AC\uB418\uC5B4 \uAD00\uB9AC\uB429\uB2C8\uB2E4.',
+      landingEyebrow: '\uB9E4\uC77C \uAE30\uB85D\uD558\uB294 \uBAA9\uD45C \uAD00\uB9AC',
+      landingTitle: '\uBAA9\uD45C\uB97C \uC791\uAC8C \uC313\uACE0, \uCD94\uC138\uB85C \uD655\uC778\uD558\uB294 Day4',
+      landingSummary: '\uBAA9\uD45C, \uAE30\uB85D, \uCD94\uC138 \uC608\uCE21\uC744 \uD55C \uD654\uBA74\uC5D0\uC11C \uBCF4\uACE0 \uB9E4\uC77C \uBCC0\uD654\uB97C \uC313\uC5B4 \uAC08 \uC218 \uC788\uB294 \uAC1C\uC778 \uBAA9\uD45C \uD2B8\uB798\uCEE4\uC785\uB2C8\uB2E4.',
+      landingFeature1: '\uBAA9\uD45C\uBCC4 \uAE30\uB85D \uCD94\uAC00 \uBC0F \uCD94\uC138 \uADF8\uB798\uD504',
+      landingFeature2: '\uACC4\uC815\uBCC4 \uC124\uC815 \uBC0F \uBAA9\uD45C \uBD84\uB9AC \uAD00\uB9AC',
+      landingFeature3: '\uAC8C\uC2A4\uD2B8 \uCCB4\uD5D8 \uACFC MCP/\uCC57\uBD07 \uC5F0\uB3D9 \uC9C0\uC6D0',
+      guestPreviewTitle: '\uAC8C\uC2A4\uD2B8 \uB370\uBAA8 \uBAA9\uD45C',
+      guestPreviewDescription: '\uB85C\uADF8\uC778 \uC5C6\uC774\uB3C4 Day4\uC758 \uBAA9\uD45C \uCE74\uB4DC \uAD6C\uC131\uC744 \uBC14\uB85C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+      guestPreviewTarget: '\uBAA9\uD45C',
+      guestPreviewLatest: '\uCD5C\uADFC \uAE30\uB85D',
+      guestPreviewEmpty: '\uD45C\uC2DC\uD560 \uB370\uBAA8 \uBAA9\uD45C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
+      none: '\uC5C6\uC74C',
       loginButtonHint: '\uB85C\uADF8\uC778 \uBC84\uD2BC\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...',
       signingIn: '\uB85C\uADF8\uC778 \uC911\uC785\uB2C8\uB2E4...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.',
@@ -545,6 +583,18 @@ function App() {
       appTitle: 'Day4',
       loginTitle: 'Google Login',
       loginDescription: 'Sign in with Google to keep goals/settings separate per user.',
+      landingEyebrow: 'Daily goal tracking',
+      landingTitle: 'Track goals, review trends, and keep progress visible in Day4',
+      landingSummary: 'Day4 is a personal goal tracker for adding daily records, reviewing trend lines, and keeping progress organized by user.',
+      landingFeature1: 'Goal-specific records and compact trend charts',
+      landingFeature2: 'Per-user settings and separated workspaces',
+      landingFeature3: 'Guest mode plus chatbot and MCP integration support',
+      guestPreviewTitle: 'Guest demo goals',
+      guestPreviewDescription: 'Preview Day4 goal cards directly on the public landing page without signing in.',
+      guestPreviewTarget: 'Target',
+      guestPreviewLatest: 'Latest',
+      guestPreviewEmpty: 'No demo goals available.',
+      none: 'None',
       loginButtonHint: 'Loading sign-in button...',
       signingIn: 'Signing in...',
       missingGoogleClientId: 'VITE_GOOGLE_CLIENT_ID is not configured.',
@@ -567,17 +617,7 @@ function App() {
   const loadMe = useCallback(async () => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY)
     if (!token) {
-      try {
-        const result = await requestApi<AuthGuestResponse>('/auth/guest', {
-          method: 'POST',
-        })
-        localStorage.setItem(AUTH_TOKEN_KEY, result.token)
-        setUser(result.user)
-      } catch {
-        setErrorMessage(text.guestLoginFailed)
-      } finally {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
       return
     }
 
@@ -625,9 +665,13 @@ function App() {
   }, [text.guestLoginFailed])
 
   useEffect(() => {
-    const onHashChange = () => setGuideRoute(getGuideRoute())
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
+    const syncGuideRoute = () => setGuideRoute(getGuideRoute())
+    window.addEventListener('hashchange', syncGuideRoute)
+    window.addEventListener('popstate', syncGuideRoute)
+    return () => {
+      window.removeEventListener('hashchange', syncGuideRoute)
+      window.removeEventListener('popstate', syncGuideRoute)
+    }
   }, [])
 
   useEffect(() => {
@@ -741,11 +785,38 @@ function App() {
   ])
 
   useEffect(() => {
-    if (guideRoute !== 'none') {
+    if (guideRoute !== 'none' || publicRoute !== 'none' || user) {
+      return
+    }
+
+    let cancelled = false
+
+    const loadGuestPreview = async () => {
+      try {
+        const result = await requestApi<GuestPreviewResponse>('/public/guest-preview')
+        if (!cancelled) {
+          setGuestPreview(result)
+        }
+      } catch {
+        if (!cancelled) {
+          setGuestPreview(null)
+        }
+      }
+    }
+
+    void loadGuestPreview()
+
+    return () => {
+      cancelled = true
+    }
+  }, [guideRoute, publicRoute, user])
+
+  useEffect(() => {
+    if (guideRoute !== 'none' || publicRoute !== 'none') {
       return
     }
     document.title = user ? 'Day4' : `${text.appTitle} - ${text.loginTitle}`
-  }, [guideRoute, text.appTitle, text.loginTitle, user])
+  }, [guideRoute, publicRoute, text.appTitle, text.loginTitle, user])
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem(AUTH_TOKEN_KEY)
@@ -810,23 +881,32 @@ function App() {
               <a href="/">{text.backToMainLogin}</a>
             </p>
             <p className="guide-link-wrap">
-              <a href={CHATBOT_GUIDE_HASH}>{text.chatbotGuide}</a>
+              <a href={CHATBOT_GUIDE_PATH}>{text.chatbotGuide}</a>
               {' | '}
-              <a href={MCP_GUIDE_HASH}>{text.mcpGuide}</a>
+              <a href={MCP_GUIDE_PATH}>{text.mcpGuide}</a>
             </p>
+            <SiteFooterLinks />
             {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
           </section>
+          <AdFitSlot />
         </main>
       )
     }
 
     return (
-      <main className="auth-page">
-        <section className="auth-card auth-card-login">
-          <p className="auth-eyebrow">Personal Goal OS</p>
+      <main className="auth-page auth-page-landing">
+        <div className="auth-stack">
+          <section className="auth-card auth-card-login">
+          <p className="auth-eyebrow">{text.landingEyebrow}</p>
           <h1>{text.appTitle}</h1>
-          <h2>{text.loginTitle}</h2>
-          <p className="auth-description">{text.loginDescription}</p>
+          <h2>{text.landingTitle}</h2>
+          <p className="auth-description">{text.landingSummary}</p>
+          <ul className="landing-feature-list">
+            <li>{text.landingFeature1}</li>
+            <li>{text.landingFeature2}</li>
+            <li>{text.landingFeature3}</li>
+          </ul>
+          <p className="auth-description auth-signin-copy">{text.loginDescription}</p>
 
           <div className="settings-row auth-lang-row">
             <label className="settings-option">
@@ -849,12 +929,39 @@ function App() {
             </button>
           </div>
           <p className="guide-link-wrap auth-links">
-            <a href={CHATBOT_GUIDE_HASH}>{text.chatbotGuide}</a>
+            <a href={CHATBOT_GUIDE_PATH}>{text.chatbotGuide}</a>
             {' | '}
-            <a href={MCP_GUIDE_HASH}>{text.mcpGuide}</a>
+            <a href={MCP_GUIDE_PATH}>{text.mcpGuide}</a>
           </p>
+          <SiteFooterLinks />
           {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
-        </section>
+          </section>
+
+          <section className="auth-card landing-preview-card">
+            <p className="auth-eyebrow">{text.guestPreviewTitle}</p>
+            <h2>{text.guestPreviewDescription}</h2>
+            {guestPreview && guestPreview.goals.length > 0 ? (
+              <div className="landing-preview-grid">
+                {guestPreview.goals.map((goal) => {
+                  const latest = goal.inputs[0]
+                  return (
+                    <article key={goal.id} className="landing-preview-item">
+                      <h3>{goal.name}</h3>
+                      <p><strong>{text.guestPreviewTarget}</strong> {goal.targetLevel} {goal.unit} {'-'} {goal.targetDate}</p>
+                      <p>
+                        <strong>{text.guestPreviewLatest}</strong>{' '}
+                        {latest ? `${latest.level} ${goal.unit} - ${latest.date}` : text.none}
+                      </p>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="empty">{text.guestPreviewEmpty}</p>
+            )}
+          </section>
+          <AdFitSlot />
+        </div>
       </main>
     )
   }
@@ -873,6 +980,3 @@ function App() {
 }
 
 export default App
-
-
-

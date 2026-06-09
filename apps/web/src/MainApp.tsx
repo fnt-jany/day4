@@ -1,6 +1,7 @@
-﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import './App.css'
+import AdFitSlot from './AdFitSlot'
 import { THEMES, DEFAULT_THEME_ID, applyThemeById, normalizeThemeId } from './themes'
 
 type GoalInput = {
@@ -86,66 +87,6 @@ type ChatbotApiKeyIssueResponse = {
   warning: string
 }
 
-declare global {
-  interface Window {
-    adsbygoogle?: unknown[]
-  }
-}
-
-function GoalListAdCard() {
-  const adRef = useRef<HTMLModElement | null>(null)
-
-  useEffect(() => {
-    if (!adRef.current || !window.adsbygoogle) {
-      return
-    }
-
-    if (adRef.current.dataset.adLoaded === 'true') {
-      return
-    }
-
-    try {
-      ;(window.adsbygoogle = window.adsbygoogle || []).push({})
-      adRef.current.dataset.adLoaded = 'true'
-    } catch {
-      // Ignore AdSense push errors during local/dev rendering.
-    }
-  }, [])
-
-  return (
-    <li className="goal-ad-item" aria-hidden="true">
-      <div className="goal-ad-card">
-        <ins
-          ref={adRef}
-          className="adsbygoogle"
-          style={{ display: 'block', width: '100%', height: '220px' }}
-          data-ad-client="ca-pub-8815573688398796"
-          data-ad-slot="7011992520"
-        />
-      </div>
-    </li>
-  )
-}
-
-const getGoalAdInsertIndexes = (goals: Goal[]) => {
-  const indexes = new Set<number>()
-  if (goals.length < 3) {
-    return indexes
-  }
-
-  const seed = goals.reduce((acc, goal, index) => (acc + goal.id * (index + 11)) % 9973, 17)
-  let cursor = 1 + (seed % 2)
-  let stepSeed = seed
-
-  while (cursor < goals.length - 1) {
-    indexes.add(cursor)
-    stepSeed = (stepSeed * 1103515245 + 12345) & 0x7fffffff
-    cursor += 2 + (stepSeed % 2)
-  }
-
-  return indexes
-}
-
 const TEXT = {
   ko: {
     appTitle: '\uC791\uC2EC\uC0AC\uC77C',
@@ -162,80 +103,82 @@ const TEXT = {
     themeLabel: '\uD14C\uB9C8',
     logout: '\uB85C\uADF8\uC544\uC6C3',
     chatbotApiKeyTitle: '\uCC57\uBD07 API \uD0A4',
-    chatbotApiKeyDesc: '외부 챗봇에서 상태 입력 시 사용할 사용자 전용 키입니다.',
-    chatbotApiKeyIssue: '키 발급/재발급',
-    chatbotApiKeyCopy: '키 복사',
-    chatbotApiKeyRevoke: '키 폐기',
-    chatbotApiKeyMissing: '발급된 키 없음',
-    chatbotApiKeyActivePrefix: '현재 키 Prefix',
-    chatbotApiKeyIssuedAt: '발급 시각',
-    chatbotApiKeyShownOnce: '아래 키는 지금 한 번만 표시됩니다. 안전한 곳에 저장하세요.',
-    chatbotApiKeyLegacyNotice: '기존 키는 복구가 불가합니다. 복사 버튼을 누르면 자동 재발급됩니다.',
-    chatbotApiKeyCopied: '키가 클립보드에 복사되었습니다.',
-    loading: '불러오는 중...',
-    goalEdit: '목표 수정',
-    goalCreate: '목표 추가',
-    name: '이름',
-    namePlaceholder: '예: 체중 감량',
-    targetDate: '목표일',
-    targetLevel: '목표수준',
-    targetLevelPlaceholder: '예: 10',
-    unit: '수준단위',
-    unitPlaceholder: '예: kg, 분, 페이지',
-    save: '저장',
-    cancel: '취소',
-    delete: '삭제',
-    confirmDeleteGoal: '이 목표를 삭제할까요?',
-    confirmDeleteRecord: '이 기록을 삭제할까요?',
-    statusInput: '기록 입력',
-    recordEdit: '기록 수정',
-    date: '날짜',
-    currentLevel: '현재수준',
-    messageOptional: '메시지 (선택)',
-    messagePlaceholder: '예: 오늘은 컨디션이 좋았음',
-    levelInputExample: '예',
-    saveInput: '입력 저장',
-    saveEdit: '수정 저장',
-    recordView: '기록 보기',
-    close: '닫기',
-    recordList: '기록 목록',
-    noRecords: '기록이 없습니다.',
-    goalList: '목표 리스트',
-    noGoalsYet: '아직 목표가 없습니다. 상단의 목표 추가 버튼을 눌러 시작하세요.',
-    goalPrefix: '목표:',
-    latestInput: '최근 입력:',
-    goalTrendOnTrack: '달성 예상',
-    goalTrendOffTrack: '미달 예상',
-    goalTrendProjected: '추세 예측',
-    none: '없음',
-    enterStatus: '기록입력',
-    viewRecords: '기록 보기',
-    edit: '수정',
-    reorderGoals: '순서 변경',
-    finishReorder: '완료',    moveTop: '맨 위',
-    moveUp: '위로',
-    moveDown: '아래로',    moveBottom: '맨 아래',
-    noRecordsForChart: '기록이 없어 그래프를 표시할 수 없습니다.',
-    miniNoRecords: '기록 없음',
-    legendRecords: '파란선: 기록',
-    legendTarget: '빨간 점선: 목표수준',
-    legendTrend: '초록 점선: 추세선',
-    tooltipDate: '날짜',
-    tooltipLevel: '수준',
-    tooltipMessage: '메시지',
-    miniProgressChartAria: '미니 진행 그래프',
-    progressChartAria: '진행 그래프',
+    chatbotApiKeyDesc: '\uC678\uBD80 \uCC57\uBD07\uC5D0\uC11C \uC0C1\uD0DC \uC785\uB825 \uC2DC \uC0AC\uC6A9\uD560 \uC0AC\uC6A9\uC790 \uC804\uC6A9 \uD0A4\uC785\uB2C8\uB2E4.',
+    chatbotApiKeyIssue: '\uD0A4 \uBC1C\uAE09/\uC7AC\uBC1C\uAE09',
+    chatbotApiKeyCopy: '\uD0A4 \uBCF5\uC0AC',
+    chatbotApiKeyRevoke: '\uD0A4 \uD3D0\uAE30',
+    chatbotApiKeyMissing: '\uBC1C\uAE09\uB41C \uD0A4 \uC5C6\uC74C',
+    chatbotApiKeyActivePrefix: '\uD604\uC7AC \uD0A4 Prefix',
+    chatbotApiKeyIssuedAt: '\uBC1C\uAE09 \uC2DC\uAC01',
+    chatbotApiKeyShownOnce: '\uC544\uB798 \uD0A4\uB294 \uC9C0\uAE08 \uD55C \uBC88\uB9CC \uD45C\uC2DC\uB429\uB2C8\uB2E4. \uC548\uC804\uD55C \uACF3\uC5D0 \uC800\uC7A5\uD558\uC138\uC694.',
+    chatbotApiKeyLegacyNotice: '\uAE30\uC874 \uD0A4\uB294 \uBCF5\uAD6C\uAC00 \uBD88\uAC00\uD569\uB2C8\uB2E4. \uBCF5\uC0AC \uBC84\uD2BC\uC744 \uB204\uB974\uBA74 \uC790\uB3D9 \uC7AC\uBC1C\uAE09\uB429\uB2C8\uB2E4.',
+    chatbotApiKeyCopied: '\uD0A4\uAC00 \uD074\uB9BD\uBCF4\uB4DC\uC5D0 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.',
+    loading: '\uBD88\uB7EC\uC624\uB294 \uC911...',
+    goalEdit: '\uBAA9\uD45C \uC218\uC815',
+    goalCreate: '\uBAA9\uD45C \uCD94\uAC00',
+    name: '\uC774\uB984',
+    namePlaceholder: '\uC608: \uCCB4\uC911 \uAC10\uB7C9',
+    targetDate: '\uBAA9\uD45C\uC77C',
+    targetLevel: '\uBAA9\uD45C\uC218\uC900',
+    targetLevelPlaceholder: '\uC608: 10',
+    unit: '\uC218\uC900\uB2E8\uC704',
+    unitPlaceholder: '\uC608: kg, \uBD84, \uD398\uC774\uC9C0',
+    save: '\uC800\uC7A5',
+    cancel: '\uCDE8\uC18C',
+    delete: '\uC0AD\uC81C',
+    confirmDeleteGoal: '\uC774 \uBAA9\uD45C\uB97C \uC0AD\uC81C\uD560\uAE4C\uC694?',
+    confirmDeleteRecord: '\uC774 \uAE30\uB85D\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?',
+    statusInput: '\uAE30\uB85D \uC785\uB825',
+    recordEdit: '\uAE30\uB85D \uC218\uC815',
+    date: '\uB0A0\uC9DC',
+    currentLevel: '\uD604\uC7AC\uC218\uC900',
+    messageOptional: '\uBA54\uC2DC\uC9C0 (\uC120\uD0DD)',
+    messagePlaceholder: '\uC608: \uC624\uB298\uC740 \uCEE8\uB514\uC158\uC774 \uC88B\uC558\uC74C',
+    levelInputExample: '\uC608',
+    saveInput: '\uC785\uB825 \uC800\uC7A5',
+    saveEdit: '\uC218\uC815 \uC800\uC7A5',
+    recordView: '\uAE30\uB85D \uBCF4\uAE30',
+    close: '\uB2EB\uAE30',
+    recordList: '\uAE30\uB85D \uBAA9\uB85D',
+    noRecords: '\uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    goalList: '\uBAA9\uD45C \uB9AC\uC2A4\uD2B8',
+    noGoalsYet: '\uC544\uC9C1 \uBAA9\uD45C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uC0C1\uB2E8\uC758 \uBAA9\uD45C \uCD94\uAC00 \uBC84\uD2BC\uC744 \uB20C\uB7EC \uC2DC\uC791\uD558\uC138\uC694.',
+    goalPrefix: '\uBAA9\uD45C:',
+    latestInput: '\uCD5C\uADFC \uC785\uB825:',
+    goalTrendOnTrack: '\uB2EC\uC131 \uC608\uC0C1',
+    goalTrendOffTrack: '\uBBF8\uB2EC \uC608\uC0C1',
+    goalTrendProjected: '\uCD94\uC138 \uC608\uCE21',
+    none: '\uC5C6\uC74C',
+    enterStatus: '\uAE30\uB85D\uC785\uB825',
+    viewRecords: '\uAE30\uB85D \uBCF4\uAE30',
+    edit: '\uC218\uC815',
+    reorderGoals: '\uC21C\uC11C \uBCC0\uACBD',
+    finishReorder: '\uC644\uB8CC',
+    moveTop: '\uB9E8 \uC704',
+    moveUp: '\uC704\uB85C',
+    moveDown: '\uC544\uB798\uB85C',
+    moveBottom: '\uB9E8 \uC544\uB798',
+    noRecordsForChart: '\uAE30\uB85D\uC774 \uC5C6\uC5B4 \uADF8\uB798\uD504\uB97C \uD45C\uC2DC\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
+    miniNoRecords: '\uAE30\uB85D \uC5C6\uC74C',
+    legendRecords: '\uD30C\uB780\uC120: \uAE30\uB85D',
+    legendTarget: '\uBE68\uAC04 \uC810\uC120: \uBAA9\uD45C\uC218\uC900',
+    legendTrend: '\uCD08\uB85D \uC810\uC120: \uCD94\uC138\uC120',
+    tooltipDate: '\uB0A0\uC9DC',
+    tooltipLevel: '\uC218\uC900',
+    tooltipMessage: '\uBA54\uC2DC\uC9C0',
+    miniProgressChartAria: '\uBBF8\uB2C8 \uC9C4\uD589 \uADF8\uB798\uD504',
+    progressChartAria: '\uC9C4\uD589 \uADF8\uB798\uD504',
     errors: {
-      loadData: '데이터를 불러오지 못했습니다. API 서버를 확인하세요.',
-      loadSettings: '설정 값을 불러오지 못했습니다.',
-      saveSettings: '설정 저장에 실패했습니다.',
-      saveGoal: '목표 저장에 실패했습니다.',
-      goalLimit: '목표는 최대 10개까지 만들 수 있습니다.',
-      deleteGoal: '목표 삭제에 실패했습니다.',
-      saveRecord: '기록 저장에 실패했습니다.',
-      recordLimit: '기록은 목표당 최대 100개까지 저장할 수 있습니다.',
-      deleteRecord: '기록 삭제에 실패했습니다.',
-      saveGoalOrder: '목표 순서 저장에 실패했습니다.',
+      loadData: '\uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. API \uC11C\uBC84\uB97C \uD655\uC778\uD558\uC138\uC694.',
+      loadSettings: '\uC124\uC815 \uAC12\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+      saveSettings: '\uC124\uC815 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+      saveGoal: '\uBAA9\uD45C \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+      goalLimit: '\uBAA9\uD45C\uB294 \uCD5C\uB300 10\uAC1C\uAE4C\uC9C0 \uB9CC\uB4E4 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+      deleteGoal: '\uBAA9\uD45C \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+      saveRecord: '\uAE30\uB85D \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+      recordLimit: '\uAE30\uB85D\uC740 \uBAA9\uD45C\uB2F9 \uCD5C\uB300 100\uAC1C\uAE4C\uC9C0 \uC800\uC7A5\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+      deleteRecord: '\uAE30\uB85D \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+      saveGoalOrder: '\uBAA9\uD45C \uC21C\uC11C \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
     },
   },  en: {
     appTitle: 'Day4',
@@ -951,6 +894,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
   const goalOrderSnapshotRef = useRef<number[] | null>(null)
 
   const text = TEXT[language]
+  const isGuestProfile = profileName.trim().toLowerCase().startsWith('guest')
   const profileInitial = profileName.trim().charAt(0).toUpperCase() || '?'
   const profileBadgeStyle = useMemo(() => {
     const colorIndex = getProfileColorIndex(profileName)
@@ -978,11 +922,6 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
     () => goals.find((goal) => goal.id === inputGoalId) ?? null,
     [goals, inputGoalId],
   )
-
-  const adInsertIndexes = useMemo(() => getGoalAdInsertIndexes(goals), [goals])
-
-
-
 
   const loadGoals = useCallback(async () => {
     setIsLoading(true)
@@ -1511,7 +1450,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                   type="button"
                   onClick={() => {
                     setProfileMenuOpen(false)
-                    window.open(`${window.location.origin}/#/chatbot-guide`, '_blank', 'noopener,noreferrer')
+                    window.open(`${window.location.origin}/chatbot-guide`, '_blank', 'noopener,noreferrer')
                   }}
                 >
                   {text.chatbotGuide}
@@ -1520,7 +1459,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                   type="button"
                   onClick={() => {
                     setProfileMenuOpen(false)
-                    window.open(`${window.location.origin}/#/mcp-guide`, '_blank', 'noopener,noreferrer')
+                    window.open(`${window.location.origin}/mcp-guide`, '_blank', 'noopener,noreferrer')
                   }}
                 >
                   {text.mcpGuide}
@@ -1585,7 +1524,7 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                 checked={language === 'ko'}
                 onChange={() => void updateLanguage('ko')}
               />
-              한국어
+              {'\uD55C\uAD6D\uC5B4'}
             </label>
             <label className="settings-option">
               <input
@@ -2029,13 +1968,13 @@ function App({ profileName, onLogout }: { profileName: string; onLogout: () => v
                     </section>
                   ) : null}
                 </li>
-                  {adInsertIndexes.has(index) ? <GoalListAdCard /> : null}
                 </Fragment>
               )
             })}
           </ul>
         )}
       </section>
+      {isGuestProfile ? <AdFitSlot className="guest-main-adfit-card" /> : null}
     </main>
   )
 }
